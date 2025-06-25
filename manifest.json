@@ -1,9 +1,9 @@
 {
   "id": "canvas-ex",
   "name": "Canvas Ex",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "minAppVersion": "0.15.0",
   "description": "Canvasのノードを取得するためのユーティリティプラグイン",
-  "author": "Your Name",
+  "author": "Navirl",
   "isDesktopOnly": false
 } 
