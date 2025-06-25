@@ -176,6 +176,15 @@ export default class CanvasExPlugin extends Plugin {
 				}, defaultMsg).open();
 			}
 		});
+
+		// Canvasへのドロップイベント追加
+		this.registerEvent(
+			this.app.workspace.on('layout-change', () => {
+				setTimeout(() => {
+					this.addCanvasDropListener();
+				}, 1000);
+			})
+		);
 	}
 
 	addStyles() {
@@ -587,6 +596,71 @@ export default class CanvasExPlugin extends Plugin {
 	async saveSettings() {
 		await this.saveData(this.settings);
 	}
+
+	// Canvas DOMにドロップリスナーを追加
+	addCanvasDropListener() {
+		const canvasLeaves = this.app.workspace.getLeavesOfType('canvas');
+		if (canvasLeaves.length === 0) return;
+		const view = canvasLeaves[0].view as any;
+		if (!view || !view.canvas) return;
+		const canvasEl = view.canvas.containerEl || view.canvas.el || document.querySelector('.canvas-container');
+		if (!canvasEl) return;
+		if ((canvasEl as any)._canvasExDropAdded) return; // 二重登録防止
+		(canvasEl as any)._canvasExDropAdded = true;
+
+		canvasEl.addEventListener('dragover', (e: DragEvent) => {
+			e.preventDefault();
+			e.dataTransfer!.dropEffect = 'copy';
+		});
+		canvasEl.addEventListener('drop', async (e: DragEvent) => {
+			e.preventDefault();
+			const text = e.dataTransfer?.getData('text/plain');
+			if (!text) return;
+			// ドロップ座標をCanvas座標に変換
+			const rect = (canvasEl as HTMLElement).getBoundingClientRect();
+			const x = e.clientX - rect.left;
+			const y = e.clientY - rect.top;
+			// Canvasファイル取得
+			const activeLeaf = this.app.workspace.activeLeaf;
+			let canvasFile: TFile | null = null;
+			if (activeLeaf && activeLeaf.view && (activeLeaf.view as any).file) {
+				canvasFile = (activeLeaf.view as any).file as TFile;
+			}
+			if (!canvasFile) {
+				const canvasLeaves = this.app.workspace.getLeavesOfType('canvas');
+				if (canvasLeaves.length > 0 && (canvasLeaves[0].view as any).file) {
+					canvasFile = (canvasLeaves[0].view as any).file as TFile;
+				}
+			}
+			if (!canvasFile) {
+				new Notice('Canvasファイルが見つかりません。');
+				return;
+			}
+			const fileContent = await this.app.vault.read(canvasFile);
+			let json: any;
+			try {
+				json = JSON.parse(fileContent);
+			} catch (e) {
+				new Notice('CanvasファイルのJSONパースに失敗しました');
+				return;
+			}
+			if (!Array.isArray(json.nodes)) {
+				json.nodes = [];
+			}
+			const newNode = {
+				id: 'node-' + Date.now() + '-' + Math.random().toString(36).slice(2),
+				type: 'text',
+				text,
+				x,
+				y,
+				width: 300,
+				height: 120
+			};
+			json.nodes.push(newNode);
+			await this.app.vault.modify(canvasFile, JSON.stringify(json, null, 2));
+			new Notice('履歴ノードをCanvasに追加しました。再読み込みしてください。');
+		});
+	}
 }
 
 // Canvasノード一覧を表示するサイドバービュー
@@ -968,6 +1042,15 @@ class CanvasNodesView extends ItemView {
 				const item = historyList.createEl('div', { cls: 'canvas-node-item' });
 				item.createEl('div', { text: `${idx + 1}. ${entry.text.length > 40 ? entry.text.substring(0, 40) + '...' : entry.text}` });
 				item.createEl('div', { text: `追加日時: ${new Date(entry.timestamp).toLocaleString()}` });
+
+				// --- ドラッグ＆ドロップ用 ---
+				item.setAttr('draggable', 'true');
+				item.addEventListener('dragstart', (e: DragEvent) => {
+					if (e.dataTransfer) {
+						e.dataTransfer.setData('text/plain', entry.text);
+						e.dataTransfer.effectAllowed = 'copy';
+					}
+				});
 			});
 		}
 	}
