@@ -157,7 +157,7 @@ export default class CanvasExPlugin extends Plugin {
 				const apiKey = this.settings.groqApiKey;
 				const defaultMsg = this.settings.groqDefaultMessage || '';
 				if (!apiKey) {
-					new Notice('Groq APIキーが設定されていません。プラグイン設定画面からAPIキーを入力してください。');
+					new Notice('Groq API key is not set. Please enter your API key in the plugin settings.');
 					return;
 				}
 				new GroqChatModal(this.app, this, async (model, userMessage) => {
@@ -169,7 +169,7 @@ export default class CanvasExPlugin extends Plugin {
 							]
 						});
 						console.log('Groq API レスポンス:', res);
-						new Notice('Groq API レスポンスをコンソールに出力しました');
+						new Notice('Groq API response has been output to the console');
 
 						let responseText = res.choices?.[0]?.message?.content || res.choices?.[0]?.text || JSON.stringify(res);
 						let nodeTexts: string[] = [];
@@ -231,8 +231,8 @@ export default class CanvasExPlugin extends Plugin {
 						this.settings.groqNodeHistory = history;
 						await this.saveSettings();
 					} catch (e) {
-						console.error('Groq APIエラー:', e);
-						new Notice('Groq APIエラー: ' + e);
+						console.error('Groq API error:', e);
+						new Notice('Groq API error: ' + e);
 					}
 				}, defaultMsg).open();
 			}
@@ -410,21 +410,21 @@ export default class CanvasExPlugin extends Plugin {
 
 				this.isInitialized = true;
 
-				console.log('Canvas Ex プラグインが読み込まれました');
-				console.log('以下の関数が利用可能になりました:');
-				console.log('- getCanvasNodes(): 現在のcanvasの全てのノードを取得');
-				console.log('- getCanvasData(): 現在のcanvasの完全なデータを取得');
-				console.log('- logCanvasNodes(): ノード情報をコンソールに出力');
+				console.log('Canvas Ex plugin has been loaded');
+				console.log('The following functions are now available:');
+				console.log('- getCanvasNodes(): Get all nodes of the current canvas');
+				console.log('- getCanvasData(): Get complete data of the current canvas');
+				console.log('- logCanvasNodes(): Output node information to the console');
 			}
 		} catch (error) {
-			console.error('Canvas Ex プラグインの初期化でエラーが発生しました:', error);
+			console.error('Canvas Ex plugin initialization error:', error);
 		}
 	}
 
 	onunload() {
 		try {
 			this.isInitialized = false;
-			console.log('Canvas Ex プラグインがアンロードされました');
+			console.log('Canvas Ex plugin has been unloaded');
 			
 			// グローバル関数を削除
 			if (typeof window !== 'undefined') {
@@ -433,7 +433,7 @@ export default class CanvasExPlugin extends Plugin {
 				delete (window as any).logCanvasNodes;
 			}
 		} catch (error) {
-			console.error('Canvas Ex プラグインのアンロードでエラーが発生しました:', error);
+			console.error('Canvas Ex plugin unload error:', error);
 		}
 	}
 
@@ -583,46 +583,46 @@ export default class CanvasExPlugin extends Plugin {
 			const nodes = this.getCanvasNodes();
 			
 			if (nodes.length === 0) {
-				console.log('ノードが見つかりませんでした');
+				console.log('No nodes found');
 				return;
 			}
 
-			console.log(`=== Canvas ノード情報 (${nodes.length}個) ===`);
+			console.log(`=== Canvas node information (${nodes.length} nodes) ===`);
 			
 			nodes.forEach((node, index) => {
-				console.log(`\n--- ノード ${index + 1} ---`);
+				console.log(`\n--- Node ${index + 1} ---`);
 				console.log(`ID: ${node.id}`);
-				console.log(`タイプ: ${node.type || '不明'}`);
-				console.log(`位置: (${node.x}, ${node.y})`);
-				console.log(`サイズ: ${node.width} x ${node.height}`);
+				console.log(`Type: ${node.type || 'Unknown'}`);
+				console.log(`Position: (${node.x}, ${node.y})`);
+				console.log(`Size: ${node.width} x ${node.height}`);
 				
 				if (node.color) {
-					console.log(`色: ${node.color}`);
+					console.log(`Color: ${node.color}`);
 				}
 
 				// タイプ別の追加情報
 				switch (node.type) {
 					case 'file':
-						console.log(`ファイル: ${node.file}`);
+						console.log(`File: ${node.file}`);
 						if (node.subpath) {
-							console.log(`サブパス: ${node.subpath}`);
+							console.log(`Subpath: ${node.subpath}`);
 						}
 						break;
 					case 'text':
-						console.log(`テキスト: ${node.text}`);
+						console.log(`Text: ${node.text}`);
 						break;
 					case 'link':
 						console.log(`URL: ${node.url}`);
 						break;
 					case 'group':
 						if (node.label) {
-							console.log(`ラベル: ${node.label}`);
+							console.log(`Label: ${node.label}`);
 						}
 						if (node.background) {
-							console.log(`背景画像: ${node.background}`);
+							console.log(`Background: ${node.background}`);
 						}
 						if (node.backgroundStyle) {
-							console.log(`背景スタイル: ${node.backgroundStyle}`);
+							console.log(`Background Style: ${node.backgroundStyle}`);
 						}
 						break;
 				}
@@ -631,22 +631,22 @@ export default class CanvasExPlugin extends Plugin {
 			// エッジ情報も取得
 			const canvasData = this.getCanvasData();
 			if (canvasData && canvasData.edges && canvasData.edges.length > 0) {
-				console.log(`\n=== エッジ情報 (${canvasData.edges.length}個) ===`);
+				console.log(`\n=== Edge information (${canvasData.edges.length} edges) ===`);
 				canvasData.edges.forEach((edge, index) => {
-					console.log(`\n--- エッジ ${index + 1} ---`);
+					console.log(`\n--- Edge ${index + 1} ---`);
 					console.log(`ID: ${edge.id}`);
 					console.log(`From: ${edge.fromNode} (${edge.fromSide})`);
 					console.log(`To: ${edge.toNode} (${edge.toSide})`);
 					if (edge.label) {
-						console.log(`ラベル: ${edge.label}`);
+						console.log(`Label: ${edge.label}`);
 					}
 					if (edge.color) {
-						console.log(`色: ${edge.color}`);
+						console.log(`Color: ${edge.color}`);
 					}
 				});
 			}
 		} catch (error) {
-			console.error('logCanvasNodesでエラーが発生しました:', error);
+			console.error('logCanvasNodes error:', error);
 		}
 	}
 
@@ -694,7 +694,7 @@ export default class CanvasExPlugin extends Plugin {
 				}
 			}
 			if (!canvasFile) {
-				new Notice('Canvasファイルが見つかりません。');
+				new Notice('Canvas file not found.');
 				return;
 			}
 			const fileContent = await this.app.vault.read(canvasFile);
@@ -702,7 +702,7 @@ export default class CanvasExPlugin extends Plugin {
 			try {
 				json = JSON.parse(fileContent);
 			} catch (e) {
-				new Notice('CanvasファイルのJSONパースに失敗しました');
+				new Notice('Failed to parse Canvas file JSON');
 				return;
 			}
 			if (!Array.isArray(json.nodes)) {
@@ -719,7 +719,7 @@ export default class CanvasExPlugin extends Plugin {
 			};
 			json.nodes.push(newNode);
 			await this.app.vault.modify(canvasFile, JSON.stringify(json, null, 2));
-			new Notice('履歴ノードをCanvasに追加しました。再読み込みしてください。');
+			new Notice('History node added to Canvas. Please reload.');
 		});
 	}
 }
@@ -754,12 +754,12 @@ class CanvasNodesView extends ItemView {
 	async onOpen() {
 		const container = this.containerEl.children[1] as HTMLElement;
 		container.empty();
-		container.createEl('h4', { text: 'Canvas ノード一覧/履歴' });
+		container.createEl('h4', { text: 'Canvas Node List/History' });
 
 		// タブUI
 		this.tabContainer = container.createEl('div', { cls: 'canvas-nodes-tab-container' });
-		const tabNodes = this.tabContainer.createEl('button', { text: 'ノード一覧', cls: 'canvas-nodes-tab' });
-		const tabHistory = this.tabContainer.createEl('button', { text: '履歴', cls: 'canvas-nodes-tab' });
+		const tabNodes = this.tabContainer.createEl('button', { text: 'Node List', cls: 'canvas-nodes-tab' });
+		const tabHistory = this.tabContainer.createEl('button', { text: 'History', cls: 'canvas-nodes-tab' });
 		tabNodes.onclick = () => { this.currentTab = 'nodes'; this.updateNodes(); };
 		tabHistory.onclick = () => { this.currentTab = 'history'; this.updateNodes(); };
 		tabNodes.classList.add('active');
@@ -768,10 +768,10 @@ class CanvasNodesView extends ItemView {
 		const filterContainer = container.createEl('div', { cls: 'canvas-nodes-filter-container', attr: { style: 'display:flex;gap:8px;align-items:center;margin:8px 0;' } });
 		this._filterContainer = filterContainer;
 		// タイプ選択
-		filterContainer.createEl('span', { text: 'タイプ:' });
+		filterContainer.createEl('span', { text: 'Type:' });
 		const typeSelect = filterContainer.createEl('select');
 		['all', 'group', 'text', 'file', 'link'].forEach(type => {
-			const opt = typeSelect.createEl('option', { text: type === 'all' ? 'すべて' : type });
+			const opt = typeSelect.createEl('option', { text: type === 'all' ? 'All' : type });
 			opt.value = type;
 		});
 		typeSelect.value = this.filterType;
@@ -780,8 +780,8 @@ class CanvasNodesView extends ItemView {
 			this.updateNodes();
 		};
 		// Groupラベル検索
-		filterContainer.createEl('span', { text: 'ラベル検索:' });
-		const labelInput = filterContainer.createEl('input', { type: 'text', placeholder: 'Groupラベルで検索' });
+		filterContainer.createEl('span', { text: 'Search by Group Label:' });
+		const labelInput = filterContainer.createEl('input', { type: 'text', placeholder: 'Search by Group Label' });
 		labelInput.value = this.labelQuery;
 		labelInput.oninput = (e) => {
 			this.labelQuery = (e.target as HTMLInputElement).value;
@@ -840,19 +840,19 @@ class CanvasNodesView extends ItemView {
 				const hasCanvasOpen = this.plugin.hasCanvasOpen();
 				if (hasCanvasOpen) {
 					this.nodesContainer.createEl('p', {
-						text: '条件に一致するノードが見つかりません',
+						text: 'No nodes matching the criteria found',
 						cls: 'canvas-nodes-empty'
 					});
 				} else {
 					this.nodesContainer.createEl('p', {
-						text: 'Canvasが開かれていません',
+						text: 'No Canvas is open',
 						cls: 'canvas-nodes-empty'
 					});
 				}
 				return;
 			}
 			this.nodesContainer.createEl('p', {
-				text: `ノード数: ${nodes.length}`,
+				text: `Node count: ${nodes.length}`,
 				cls: 'canvas-nodes-count'
 			});
 			const nodesList = this.nodesContainer.createEl('div', {
@@ -869,7 +869,7 @@ class CanvasNodesView extends ItemView {
 				});
 
 				headerEl.createEl('span', {
-					text: `${index + 1}. ${node.type || '不明'}`,
+					text: `${index + 1}. ${node.type || 'Unknown'}`,
 					cls: 'canvas-node-type'
 				});
 
@@ -884,18 +884,18 @@ class CanvasNodesView extends ItemView {
 				});
 
 				detailsEl.createEl('div', {
-					text: `位置: (${node.x}, ${node.y})`,
+					text: `Position: (${node.x}, ${node.y})`,
 					cls: 'canvas-node-position'
 				});
 
 				detailsEl.createEl('div', {
-					text: `サイズ: ${node.width} x ${node.height}`,
+					text: `Size: ${node.width} x ${node.height}`,
 					cls: 'canvas-node-size'
 				});
 
 				if (node.color) {
 					detailsEl.createEl('div', {
-						text: `色: ${node.color}`,
+						text: `Color: ${node.color}`,
 						cls: 'canvas-node-color'
 					});
 				}
@@ -905,13 +905,13 @@ class CanvasNodesView extends ItemView {
 					case 'file':
 						if (node.file) {
 							detailsEl.createEl('div', {
-								text: `ファイル: ${node.file}`,
+								text: `File: ${node.file}`,
 								cls: 'canvas-node-file'
 							});
 						}
 						if (node.subpath) {
 							detailsEl.createEl('div', {
-								text: `サブパス: ${node.subpath}`,
+								text: `Subpath: ${node.subpath}`,
 								cls: 'canvas-node-subpath'
 							});
 						}
@@ -921,7 +921,7 @@ class CanvasNodesView extends ItemView {
 							const textEl = detailsEl.createEl('div', {
 								cls: 'canvas-node-text'
 							});
-							textEl.createEl('span', { text: 'テキスト: ' });
+							textEl.createEl('span', { text: 'Text: ' });
 							textEl.createEl('span', { 
 								text: node.text.length > 50 ? node.text.substring(0, 50) + '...' : node.text,
 								cls: 'canvas-node-text-content'
@@ -939,13 +939,13 @@ class CanvasNodesView extends ItemView {
 					case 'group':
 						if (node.label) {
 							detailsEl.createEl('div', {
-								text: `ラベル: ${node.label}`,
+								text: `Label: ${node.label}`,
 								cls: 'canvas-node-label'
 							});
 						}
 						if (node.background) {
 							detailsEl.createEl('div', {
-								text: `背景: ${node.background}`,
+								text: `Background: ${node.background}`,
 								cls: 'canvas-node-background'
 							});
 						}
@@ -974,7 +974,7 @@ class CanvasNodesView extends ItemView {
 
 						// 1. グループ内テキストノード一覧を出力
 						const itemList = document.createElement('div');
-						itemList.textContent = 'グループ内テキストノード一覧を出力';
+						itemList.textContent = 'Output list of text nodes in the group';
 						itemList.style.padding = '8px 16px';
 						itemList.style.cursor = 'pointer';
 						itemList.style.color = 'var(--text-normal, #fff)';
@@ -999,21 +999,21 @@ class CanvasNodesView extends ItemView {
 								(n.y + n.height) <= (group.y + group.height)
 							);
 							if (texts.length === 0) {
-								new Notice('グループ内にテキストノードはありません');
+								new Notice('No text nodes in the group');
 								return;
 							}
-							let msg = 'グループ内テキストノード一覧:\n';
+							let msg = 'List of text nodes in the group:\n';
 							texts.forEach(t => {
-								msg += `ID: ${t.id}\n内容: ${t.text}\n---\n`;
+								msg += `ID: ${t.id}\nContent: ${t.text}\n---\n`;
 							});
 							console.log(msg);
-							new Notice('グループ内テキストノード一覧をコンソールに出力しました');
+							new Notice('List of text nodes in the group has been output to the console');
 						};
 						menu.appendChild(itemList);
 
-						// 2. GroqにPOST
+						// 2. POST to Groq
 						const itemPost = document.createElement('div');
-						itemPost.textContent = 'GroqにPOST';
+						itemPost.textContent = 'POST to Groq';
 						itemPost.style.padding = '8px 16px';
 						itemPost.style.cursor = 'pointer';
 						itemPost.style.color = 'var(--text-normal, #fff)';
@@ -1045,10 +1045,10 @@ class CanvasNodesView extends ItemView {
 								content = texts.map(t => t.text).join('\n');
 							}
 							if (!apiKey) {
-								new Notice('Groq APIキーが設定されていません。プラグイン設定画面からAPIキーを入力してください。');
+								new Notice('Groq API key is not set. Please enter your API key in the plugin settings.');
 								return;
 							}
-							new Notice('GroqにPOST中...');
+							new Notice('Posting to Groq...');
 							try {
 								const res = await postGroqChatCompletion(apiKey, {
 									model: this.plugin.settings.groqModel || 'llama3-8b-8192',
@@ -1056,8 +1056,8 @@ class CanvasNodesView extends ItemView {
 										{ role: 'user', content }
 									]
 								});
-								console.log('Groq API レスポンス:', res);
-								new Notice('Groq API レスポンスをコンソールに出力しました');
+								console.log('Groq API response:', res);
+								new Notice('Groq API response has been output to the console');
 
 								let responseText = res.choices?.[0]?.message?.content || res.choices?.[0]?.text || JSON.stringify(res);
 								let nodeTexts: string[] = [];
@@ -1117,7 +1117,7 @@ class CanvasNodesView extends ItemView {
 									}
 								}
 								if (!canvasFile) {
-									new Notice('Canvasファイルが見つかりません。');
+									new Notice('Canvas file not found.');
 									return;
 								}
 								const fileContent = await this.plugin.app.vault.read(canvasFile);
@@ -1125,7 +1125,7 @@ class CanvasNodesView extends ItemView {
 								try {
 									json = JSON.parse(fileContent);
 								} catch (e) {
-									new Notice('CanvasファイルのJSONパースに失敗しました');
+									new Notice('Failed to parse Canvas file JSON');
 									return;
 								}
 								if (!Array.isArray(json.nodes)) {
@@ -1158,10 +1158,10 @@ class CanvasNodesView extends ItemView {
 								this.plugin.settings.groqNodeHistory = history;
 								await this.plugin.saveSettings();
 								await this.plugin.app.vault.modify(canvasFile, JSON.stringify(json, null, 2));
-								new Notice('GroqレスポンスをCanvasファイルに追加しました。再読み込みしてください。');
+								new Notice('Groq response added to Canvas file. Please reload.');
 							} catch (e) {
-								console.error('Groq APIエラー:', e);
-								new Notice('Groq APIエラー: ' + e);
+								console.error('Groq API error:', e);
+								new Notice('Groq API error: ' + e);
 							}
 						};
 						menu.appendChild(itemPost);
@@ -1186,13 +1186,13 @@ class CanvasNodesView extends ItemView {
 			const history: GroqNodeHistoryEntry[] = this.plugin.settings.groqNodeHistory || [];
 			if (history.length === 0) {
 				this.nodesContainer.createEl('p', {
-					text: 'Groq経由で追加したノード履歴はありません',
+					text: 'No node history added via Groq',
 					cls: 'canvas-nodes-empty'
 				});
 				return;
 			}
 			this.nodesContainer.createEl('p', {
-				text: `履歴数: ${history.length}`,
+				text: `History count: ${history.length}`,
 				cls: 'canvas-nodes-count'
 			});
 			const historyList = this.nodesContainer.createEl('div', {
@@ -1201,7 +1201,7 @@ class CanvasNodesView extends ItemView {
 			history.forEach((entry, idx) => {
 				const item = historyList.createEl('div', { cls: 'canvas-node-item' });
 				item.createEl('div', { text: `${idx + 1}. ${entry.text.length > 40 ? entry.text.substring(0, 40) + '...' : entry.text}` });
-				item.createEl('div', { text: `追加日時: ${new Date(entry.timestamp).toLocaleString()}` });
+				item.createEl('div', { text: `Added at: ${new Date(entry.timestamp).toLocaleString()}` });
 
 				// --- ドラッグ＆ドロップ用 ---
 				item.setAttr('draggable', 'true');
@@ -1251,11 +1251,11 @@ class CanvasExSettingTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
-		containerEl.createEl('h2', { text: 'Canvas Ex プラグイン設定' });
+		containerEl.createEl('h2', { text: 'Canvas Ex plugin settings' });
 
 		new Setting(containerEl)
-			.setName('Groq APIキー')
-			.setDesc('https://console.groq.com/ から取得したAPIキーを入力してください')
+			.setName('Groq API key')
+			.setDesc('Enter your API key from https://console.groq.com/')
 			.addText(text =>
 				text
 					.setPlaceholder('sk-...')
@@ -1268,8 +1268,8 @@ class CanvasExSettingTab extends PluginSettingTab {
 
 		// モデル選択UI（models.jsonから）
 		new Setting(containerEl)
-			.setName('Groq モデル')
-			.setDesc('Groq APIで使用するモデルを選択')
+			.setName('Groq model')
+			.setDesc('Select the model to use with Groq API')
 			.addDropdown(drop => {
 				this.modelOptions.forEach(opt => drop.addOption(opt.value, opt.label));
 				drop.setValue(this.plugin.settings.groqModel || 'llama3-8b-8192');
@@ -1281,11 +1281,11 @@ class CanvasExSettingTab extends PluginSettingTab {
 
 		// 追加: デフォルトメッセージ設定
 		new Setting(containerEl)
-			.setName('Groq APIデフォルトメッセージ')
-			.setDesc('コマンドや右クリックでGroq APIに送るデフォルトメッセージ')
+			.setName('Groq API default message')
+			.setDesc('Default message to send to Groq API via command or right-click')
 			.addTextArea(text =>
 				text
-					.setPlaceholder('ここにデフォルトメッセージを入力')
+					.setPlaceholder('Enter default message here')
 					.setValue(this.plugin.settings.groqDefaultMessage || '')
 					.onChange(async (value) => {
 						this.plugin.settings.groqDefaultMessage = value;
@@ -1295,8 +1295,8 @@ class CanvasExSettingTab extends PluginSettingTab {
 
 		// 追加: JSON抽出設定
 		new Setting(containerEl)
-			.setName('JSONのみ抽出して出力に使う')
-			.setDesc('Groq APIの出力から最初に見つかったJSON部分だけを履歴やノードに反映します')
+			.setName('Extract only JSON and use for output')
+			.setDesc('Only the first JSON part found in the Groq API output will be reflected in history and nodes.')
 			.addToggle(toggle =>
 				toggle.setValue(this.plugin.settings.groqExtractJsonOnly || false)
 				.onChange(async (value) => {
@@ -1307,10 +1307,10 @@ class CanvasExSettingTab extends PluginSettingTab {
 
 		// 追加: JSON抽出フィールド
 		new Setting(containerEl)
-			.setName('抽出フィールド（カンマ区切り）')
-			.setDesc('JSONから抽出してTextノードに使うフィールド名をカンマ区切りで指定（例: name,objective）')
+			.setName('Extract fields (comma separated)')
+			.setDesc('Specify the field names to extract from JSON and use for Text nodes, separated by commas (e.g., name,objective)')
 			.addText(text =>
-				text.setPlaceholder('例: name,objective')
+				text.setPlaceholder('Example: name,objective')
 				.setValue(this.plugin.settings.groqExtractFields || '')
 				.onChange(async (value) => {
 					this.plugin.settings.groqExtractFields = value;
@@ -1343,8 +1343,8 @@ class GroqChatModal extends Modal {
 
 		// モデル名入力
 		new Setting(contentEl)
-			.setName('モデル名')
-			.setDesc('例: llama3-8b-8192')
+			.setName('Model name')
+			.setDesc('Example: llama3-8b-8192')
 			.addText((text) => {
 				text.setValue(model)
 					.onChange((value) => { model = value; });
@@ -1352,9 +1352,9 @@ class GroqChatModal extends Modal {
 
 		// メッセージ入力
 		new Setting(contentEl)
-			.setName('メッセージ')
+			.setName('Message')
 			.addTextArea((text) => {
-				text.setPlaceholder('ユーザーのメッセージを入力')
+				text.setPlaceholder('User message input')
 					.setValue(message)
 					.onChange((value) => { message = value; });
 			});
@@ -1362,11 +1362,11 @@ class GroqChatModal extends Modal {
 		// 実行ボタン
 		const buttonSetting = new Setting(contentEl);
 		buttonSetting.addButton((btn) =>
-			btn.setButtonText('送信')
+			btn.setButtonText('Send')
 				.setCta()
 				.onClick(() => {
 					if (!model || !message) {
-						new Notice('モデル名とメッセージは必須です');
+						new Notice('Model name and message are required');
 						return;
 					}
 					this.close();
