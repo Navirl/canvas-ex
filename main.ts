@@ -41,13 +41,8 @@ const CANVAS_NODES_VIEW_TYPE = 'canvas-nodes-view';
 
 // Groqノード履歴型
 interface GroqNodeHistoryEntry {
-	id: string;
 	text: string;
 	timestamp: number;
-	x: number;
-	y: number;
-	width: number;
-	height: number;
 }
 
 // 設定インターフェース
@@ -223,13 +218,8 @@ export default class CanvasExPlugin extends Plugin {
 						// 履歴に追加（canvasファイル直接編集時も必ず実行）
 						const history: GroqNodeHistoryEntry[] = this.settings.groqNodeHistory || [];
 						history.unshift({
-							id: newNode.id,
 							text: newNode.text,
-							timestamp: Date.now(),
-							x: newNode.x,
-							y: newNode.y,
-							width: newNode.width,
-							height: newNode.height
+							timestamp: Date.now()
 						});
 						if (history.length > 100) history.length = 100;
 						this.settings.groqNodeHistory = history;
@@ -982,13 +972,8 @@ class CanvasNodesView extends ItemView {
 								// 履歴に追加（canvasファイル直接編集時も必ず実行）
 								const history: GroqNodeHistoryEntry[] = this.plugin.settings.groqNodeHistory || [];
 								history.unshift({
-									id: newNode.id,
 									text: newNode.text,
-									timestamp: Date.now(),
-									x: newNode.x,
-									y: newNode.y,
-									width: newNode.width,
-									height: newNode.height
+									timestamp: Date.now()
 								});
 								if (history.length > 100) history.length = 100;
 								this.plugin.settings.groqNodeHistory = history;
@@ -1038,9 +1023,7 @@ class CanvasNodesView extends ItemView {
 			history.forEach((entry, idx) => {
 				const item = historyList.createEl('div', { cls: 'canvas-node-item' });
 				item.createEl('div', { text: `${idx + 1}. ${entry.text.length > 40 ? entry.text.substring(0, 40) + '...' : entry.text}` });
-				item.createEl('div', { text: `ID: ${entry.id}` });
 				item.createEl('div', { text: `追加日時: ${new Date(entry.timestamp).toLocaleString()}` });
-				item.createEl('div', { text: `位置: (${entry.x}, ${entry.y}) サイズ: ${entry.width}x${entry.height}` });
 			});
 		}
 	}
