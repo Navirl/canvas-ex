@@ -669,6 +669,9 @@ class CanvasNodesView extends ItemView {
 	private nodesContainer: HTMLElement;
 	private tabContainer: HTMLElement;
 	private currentTab: 'nodes' | 'history' = 'nodes';
+	private filterType: string = 'all';
+	private labelQuery: string = '';
+	private _filterContainer: HTMLElement | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: CanvasExPlugin) {
 		super(leaf);
@@ -700,6 +703,37 @@ class CanvasNodesView extends ItemView {
 		tabHistory.onclick = () => { this.currentTab = 'history'; this.updateNodes(); };
 		tabNodes.classList.add('active');
 
+		// === 追加: フィルターUI ===
+		const filterContainer = container.createEl('div', { cls: 'canvas-nodes-filter-container', attr: { style: 'display:flex;gap:8px;align-items:center;margin:8px 0;' } });
+		this._filterContainer = filterContainer;
+		// タイプ選択
+		filterContainer.createEl('span', { text: 'タイプ:' });
+		const typeSelect = filterContainer.createEl('select');
+		['all', 'group', 'text', 'file', 'link'].forEach(type => {
+			const opt = typeSelect.createEl('option', { text: type === 'all' ? 'すべて' : type });
+			opt.value = type;
+		});
+		typeSelect.value = this.filterType;
+		typeSelect.onchange = (e) => {
+			this.filterType = (e.target as HTMLSelectElement).value;
+			this.updateNodes();
+		};
+		// Groupラベル検索
+		filterContainer.createEl('span', { text: 'ラベル検索:' });
+		const labelInput = filterContainer.createEl('input', { type: 'text', placeholder: 'Groupラベルで検索' });
+		labelInput.value = this.labelQuery;
+		labelInput.oninput = (e) => {
+			this.labelQuery = (e.target as HTMLInputElement).value;
+			this.updateNodes();
+		};
+		// group以外選択時は無効化
+		const updateLabelInputState = () => {
+			labelInput.disabled = this.filterType !== 'group';
+			if (labelInput.disabled) labelInput.value = '';
+		};
+		typeSelect.addEventListener('change', updateLabelInputState);
+		updateLabelInputState();
+
 		// ノード一覧のコンテナ
 		this.nodesContainer = container.createEl('div', {
 			cls: 'canvas-nodes-container'
@@ -716,6 +750,15 @@ class CanvasNodesView extends ItemView {
 		if (!this.nodesContainer) return;
 		this.nodesContainer.empty();
 
+		// フィルターUIの表示/非表示
+		if (this._filterContainer) {
+			if (this.currentTab === 'nodes') {
+				this._filterContainer.style.display = '';
+			} else {
+				this._filterContainer.style.display = 'none';
+			}
+		}
+
 		// タブのactive切り替え
 		const tabs = this.tabContainer.querySelectorAll('button');
 		tabs.forEach(btn => btn.classList.remove('active'));
@@ -723,13 +766,20 @@ class CanvasNodesView extends ItemView {
 		if (this.currentTab === 'history') tabs[1].classList.add('active');
 
 		if (this.currentTab === 'nodes') {
-			// 既存のノード一覧表示ロジック
-			const nodes = this.plugin.getCanvasNodes();
+			let nodes = this.plugin.getCanvasNodes();
+			// === 追加: タイプフィルター ===
+			if (this.filterType !== 'all') {
+				nodes = nodes.filter(n => n.type === this.filterType);
+			}
+			// === 追加: Groupラベル検索 ===
+			if (this.filterType === 'group' && this.labelQuery.trim() !== '') {
+				nodes = nodes.filter(n => typeof n.label === 'string' && n.label.includes(this.labelQuery.trim()));
+			}
 			if (nodes.length === 0) {
 				const hasCanvasOpen = this.plugin.hasCanvasOpen();
 				if (hasCanvasOpen) {
 					this.nodesContainer.createEl('p', {
-						text: 'Canvasは開いていますが、ノードが見つかりません',
+						text: '条件に一致するノードが見つかりません',
 						cls: 'canvas-nodes-empty'
 					});
 				} else {
