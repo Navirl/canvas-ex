@@ -3,7 +3,7 @@
   "name": "Canvas Ex",
   "version": "0.1.0",
   "minAppVersion": "0.15.0",
-  "description": "Canvasのノードを取得するためのユーティリティプラグイン",
+  "description": "A multifunctional utility plugin for listing, searching, and filtering Canvas nodes and edges, with AI (Groq API) integration for node generation and history management. This plugin enhances Canvas functionality and integrates with AI for improved performance.",
   "author": "Navirl",
   "isDesktopOnly": false
 } 
