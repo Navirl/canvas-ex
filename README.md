@@ -1,93 +1,95 @@
 # Canvas Ex Plugin
 
-ObsidianのCanvasで現在開いているノードを取得するためのユーティリティプラグインです。
+[日本語版READMEはこちら](./README.ja.md)
 
-## 機能
+> **Note:** Most of this repository was created using [Cursor](https://www.cursor.so/) (an AI pair programming tool).
 
-このプラグインは、Obsidianのコンソールで以下の関数を利用できるようにします：
+A multifunctional utility plugin for Obsidian Canvas: get, manage, and utilize node information, and integrate with Groq AI.
 
-### `getCanvasNodes()`
-現在開いているcanvasの全てのノードを取得します。
+## Main Features
 
-**戻り値**: ノードの配列
-```javascript
-[
-  {
-    id: "node-id",
-    x: 100,
-    y: 200,
-    width: 300,
-    height: 150,
-    type: "text",
-    text: "ノードの内容",
-    color: "#ff0000"
-  }
-]
-```
+- **Canvas Node List & History Sidebar**: View/search/filter current Canvas nodes and Groq-generated history in a sidebar
+- **Node Info API**: Use functions like `getCanvasNodes()`, `getCanvasData()`, `logCanvasNodes()` from the developer console
+- **Groq API Integration**: Send Canvas nodes or group texts to Groq AI and add the response as new nodes
+- **Drag & Drop from History**: Add text nodes to Canvas by dragging from the history tab
+- **Right-click Menu**: On group nodes, right-click for actions like "List group texts" or "POST to Groq"
+- **Flexible Settings**: Configure Groq API key, model, default message, JSON extraction, and field selection
 
-### `getCanvasData()`
-現在開いているcanvasの完全なデータ（ノードとエッジ）を取得します。
+## Usage
 
-**戻り値**: Canvasの完全なデータオブジェクト
-```javascript
-{
-  nodes: [...],
-  edges: [...],
-  // その他のcanvasデータ
-}
-```
+### 1. Installation
 
-### `logCanvasNodes()`
-現在のcanvasのノード情報をコンソールに詳細に出力します。
+1. Clone or download this repository
+2. Place it in your Obsidian plugin folder (`.obsidian/plugins/`)
+3. Restart Obsidian and enable "Canvas Ex" from Settings → Community Plugins
 
-## 使用方法
+### 2. Sidebar Usage
 
-1. このプラグインをObsidianにインストールして有効化します
-2. Canvasファイルを開きます
-3. 開発者ツール（F12）を開いてコンソールにアクセスします
-4. 以下のコマンドを実行します：
+- A "Canvas Nodes" icon will appear in the right sidebar
+- Use the node list/history tabs to view, search, and filter Canvas nodes and history
+- Drag items from the history tab to add them as text nodes to Canvas
 
-```javascript
-// 全てのノードを取得
+### 3. Groq API Integration
+
+- Right-click a group node in the sidebar and select "POST to Groq" to send group texts to Groq AI and add the response as new nodes
+- Use the command palette: "Groq Chat Completion (API POST)" to send any message to Groq and save the response to history
+- Configure API key, model, default message, JSON extraction, and fields in the settings tab
+
+#### Supported Models (from `models.json`)
+- llama3-8b-8192
+- llama3-70b-8192
+- mixtral-8x7b-32768
+- gemma-7b-it
+- qwen/qwen3-32b
+
+### 4. Console API
+
+Open the developer tools (F12) and use the following functions:
+
+```js
+// Get all nodes
 const nodes = getCanvasNodes();
 console.log(nodes);
 
-// 完全なcanvasデータを取得
+// Get full canvas data
 const canvasData = getCanvasData();
 console.log(canvasData);
 
-// ノード情報を詳細に出力
+// Log detailed node info
 logCanvasNodes();
 ```
 
-## ノードタイプ
+### 5. Node Types
 
-このプラグインは以下のノードタイプをサポートしています：
+- **file**: File node (`file`, `subpath`)
+- **text**: Text node (`text`)
+- **link**: Link node (`url`)
+- **group**: Group node (`label`, `background`, `backgroundStyle`)
 
-- **file**: ファイルノード（`file`, `subpath`プロパティを含む）
-- **text**: テキストノード（`text`プロパティを含む）
-- **link**: リンクノード（`url`プロパティを含む）
-- **group**: グループノード（`label`, `background`, `backgroundStyle`プロパティを含む）
+## Settings
 
-## インストール
+- **Groq API Key**: Get your API key from https://console.groq.com/
+- **Groq Model**: Select the AI model to use (add more in `models.json`)
+- **Default Message**: Template for messages sent to Groq
+- **Extract JSON Only**: Use only the first JSON part of the AI response for nodes/history
+- **Extract Fields**: Extract specific fields from JSON to use as node text (comma-separated)
 
-1. このリポジトリをクローンまたはダウンロードします
-2. Obsidianのプラグインフォルダに配置します
-3. Obsidianでプラグインを有効化します
-
-## 開発
+## Development & Build
 
 ```bash
-# 依存関係をインストール
+# Install dependencies
 npm install
 
-# 開発モードでビルド
+# Build in development mode
 npm run dev
 
-# 本番用ビルド
+# Production build
 npm run build
 ```
 
-## ライセンス
+- Uses TypeScript and esbuild
+- Main dependencies: obsidian, esbuild, typescript, etc.
+
+## License
 
 MIT License 
