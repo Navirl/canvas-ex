@@ -739,83 +739,7 @@ class CanvasNodesView extends ItemView {
 					break;
 			}
 
-			// 右クリックメニュー追加（textノードのみ）
-			if (node.type === 'text' && node.text) {
-				nodeEl.addEventListener('contextmenu', async (e) => {
-					e.preventDefault();
-					// 既存のメニューを消す
-					document.querySelectorAll('.canvasex-context-menu').forEach(el => el.remove());
-
-					// メニュー作成
-					const menu = document.createElement('div');
-					menu.className = 'canvasex-context-menu';
-					menu.style.position = 'fixed';
-					menu.style.zIndex = '9999';
-					menu.style.left = `${e.clientX}px`;
-					menu.style.top = `${e.clientY}px`;
-					menu.style.background = 'var(--background-primary, #222)';
-					menu.style.border = '1px solid var(--background-modifier-border, #444)';
-					menu.style.borderRadius = '6px';
-					menu.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
-					menu.style.padding = '4px 0';
-					menu.style.minWidth = '180px';
-
-					const item = document.createElement('div');
-					item.textContent = 'GroqにPOST';
-					item.style.padding = '8px 16px';
-					item.style.cursor = 'pointer';
-					item.style.color = 'var(--text-normal, #fff)';
-					item.addEventListener('mouseenter', () => {
-						item.style.background = 'var(--background-secondary, #333)';
-					});
-					item.addEventListener('mouseleave', () => {
-						item.style.background = '';
-					});
-					item.onclick = async () => {
-						menu.remove();
-						const apiKey = this.plugin.settings.groqApiKey;
-						const defaultMsg = this.plugin.settings.groqDefaultMessage || '';
-						let content = node.text;
-						if (defaultMsg) {
-							content = applyTemplate(defaultMsg, node);
-						}
-						if (!apiKey) {
-							new Notice('Groq APIキーが設定されていません。プラグイン設定画面からAPIキーを入力してください。');
-							return;
-						}
-						new Notice('GroqにPOST中...');
-						try {
-							const res = await postGroqChatCompletion(apiKey, {
-								model: 'llama3-8b-8192',
-								messages: [
-									{ role: 'user', content }
-								]
-							});
-							console.log('Groq API レスポンス:', res);
-							new Notice('Groq API レスポンスをコンソールに出力しました');
-						} catch (e) {
-							console.error('Groq APIエラー:', e);
-							new Notice('Groq APIエラー: ' + e);
-						}
-					};
-					menu.appendChild(item);
-
-					document.body.appendChild(menu);
-
-					// メニュー外クリックで消す
-					const removeMenu = (ev: MouseEvent) => {
-						if (!menu.contains(ev.target as Node)) {
-							menu.remove();
-							document.removeEventListener('mousedown', removeMenu);
-						}
-					};
-					setTimeout(() => {
-						document.addEventListener('mousedown', removeMenu);
-					}, 0);
-				});
-			}
-
-			// 右クリックメニュー追加（groupノード用）
+			// グループノード用右クリックメニュー
 			if (node.type === 'group') {
 				nodeEl.addEventListener('contextmenu', async (e) => {
 					e.preventDefault();
@@ -835,18 +759,19 @@ class CanvasNodesView extends ItemView {
 					menu.style.padding = '4px 0';
 					menu.style.minWidth = '220px';
 
-					const item = document.createElement('div');
-					item.textContent = 'グループ内テキストノード一覧を出力';
-					item.style.padding = '8px 16px';
-					item.style.cursor = 'pointer';
-					item.style.color = 'var(--text-normal, #fff)';
-					item.addEventListener('mouseenter', () => {
-						item.style.background = 'var(--background-secondary, #333)';
+					// 1. グループ内テキストノード一覧を出力
+					const itemList = document.createElement('div');
+					itemList.textContent = 'グループ内テキストノード一覧を出力';
+					itemList.style.padding = '8px 16px';
+					itemList.style.cursor = 'pointer';
+					itemList.style.color = 'var(--text-normal, #fff)';
+					itemList.addEventListener('mouseenter', () => {
+						itemList.style.background = 'var(--background-secondary, #333)';
 					});
-					item.addEventListener('mouseleave', () => {
-						item.style.background = '';
+					itemList.addEventListener('mouseleave', () => {
+						itemList.style.background = '';
 					});
-					item.onclick = () => {
+					itemList.onclick = () => {
 						menu.remove();
 						// groupノードの範囲内にあるtextノードを抽出
 						const allNodes = this.plugin.getCanvasNodes();
@@ -871,7 +796,62 @@ class CanvasNodesView extends ItemView {
 						console.log(msg);
 						new Notice('グループ内テキストノード一覧をコンソールに出力しました');
 					};
-					menu.appendChild(item);
+					menu.appendChild(itemList);
+
+					// 2. GroqにPOST
+					const itemPost = document.createElement('div');
+					itemPost.textContent = 'GroqにPOST';
+					itemPost.style.padding = '8px 16px';
+					itemPost.style.cursor = 'pointer';
+					itemPost.style.color = 'var(--text-normal, #fff)';
+					itemPost.addEventListener('mouseenter', () => {
+						itemPost.style.background = 'var(--background-secondary, #333)';
+					});
+					itemPost.addEventListener('mouseleave', () => {
+						itemPost.style.background = '';
+					});
+					itemPost.onclick = async () => {
+						menu.remove();
+						const apiKey = this.plugin.settings.groqApiKey;
+						const defaultMsg = this.plugin.settings.groqDefaultMessage || '';
+						// groupノードの範囲内にあるtextノードをY→X昇順で抽出
+						const allNodes = this.plugin.getCanvasNodes();
+						const group = node;
+						const texts = allNodes.filter(n =>
+							n.type === 'text' &&
+							typeof n.x === 'number' && typeof n.y === 'number' &&
+							typeof n.width === 'number' && typeof n.height === 'number' &&
+							n.x >= group.x &&
+							n.y >= group.y &&
+							(n.x + n.width) <= (group.x + group.width) &&
+							(n.y + n.height) <= (group.y + group.height)
+						).sort((a, b) => a.y - b.y || a.x - b.x);
+						let content = '';
+						if (defaultMsg) {
+							content = applyGroupTemplate(defaultMsg, texts);
+						} else {
+							content = texts.map(t => t.text).join('\n');
+						}
+						if (!apiKey) {
+							new Notice('Groq APIキーが設定されていません。プラグイン設定画面からAPIキーを入力してください。');
+							return;
+						}
+						new Notice('GroqにPOST中...');
+						try {
+							const res = await postGroqChatCompletion(apiKey, {
+								model: 'llama3-8b-8192',
+								messages: [
+									{ role: 'user', content }
+								]
+							});
+							console.log('Groq API レスポンス:', res);
+							new Notice('Groq API レスポンスをコンソールに出力しました');
+						} catch (e) {
+							console.error('Groq APIエラー:', e);
+							new Notice('Groq APIエラー: ' + e);
+						}
+					};
+					menu.appendChild(itemPost);
 
 					document.body.appendChild(menu);
 
@@ -998,4 +978,14 @@ class GroqChatModal extends Modal {
 function applyTemplate(template: string, node: any): string {
 	// {{text1}} → node.text
 	return template.replace(/\{\{\s*text1\s*\}\}/g, node.text ?? '');
+}
+
+// テンプレート置換関数（複数text対応）
+function applyGroupTemplate(template: string, textNodes: any[]): string {
+	let result = template;
+	for (let i = 0; i < textNodes.length; i++) {
+		const re = new RegExp(`\\{\\{\\s*text${i+1}\\s*\\}}`, 'g');
+		result = result.replace(re, textNodes[i]?.text ?? '');
+	}
+	return result;
 }
