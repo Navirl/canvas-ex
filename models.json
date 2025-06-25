@@ -1,0 +1,7 @@
+[
+  { "value": "llama3-8b-8192", "label": "llama3-8b-8192" },
+  { "value": "llama3-70b-8192", "label": "llama3-70b-8192" },
+  { "value": "mixtral-8x7b-32768", "label": "mixtral-8x7b-32768" },
+  { "value": "gemma-7b-it", "label": "gemma-7b-it" },
+  { "value": "qwen/qwen3-32b", "label": "qwen/qwen3-32b" }
+] 

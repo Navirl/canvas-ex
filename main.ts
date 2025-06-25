@@ -50,13 +50,21 @@ interface CanvasExSettings {
 	groqApiKey: string;
 	groqDefaultMessage?: string;
 	groqNodeHistory?: GroqNodeHistoryEntry[];
+	groqModel?: string;
 }
 
 const DEFAULT_SETTINGS: CanvasExSettings = {
 	groqApiKey: '',
 	groqDefaultMessage: '',
 	groqNodeHistory: [],
+	groqModel: 'llama3-8b-8192',
 };
+
+// 1. models.jsonの型
+interface GroqModelOption {
+	value: string;
+	label: string;
+}
 
 export default class CanvasExPlugin extends Plugin {
 	private isInitialized = false;
@@ -990,7 +998,7 @@ class CanvasNodesView extends ItemView {
 							new Notice('GroqにPOST中...');
 							try {
 								const res = await postGroqChatCompletion(apiKey, {
-									model: 'llama3-8b-8192',
+									model: this.plugin.settings.groqModel || 'llama3-8b-8192',
 									messages: [
 										{ role: 'user', content }
 									]
@@ -1109,10 +1117,33 @@ class CanvasNodesView extends ItemView {
 // 設定タブクラス
 class CanvasExSettingTab extends PluginSettingTab {
 	plugin: CanvasExPlugin;
+	modelOptions: GroqModelOption[] = [
+		{ value: 'llama3-8b-8192', label: 'llama3-8b-8192' },
+		{ value: 'llama3-70b-8192', label: 'llama3-70b-8192' },
+		{ value: 'mixtral-8x7b-32768', label: 'mixtral-8x7b-32768' },
+		{ value: 'gemma-7b-it', label: 'gemma-7b-it' },
+	];
 
 	constructor(app: App, plugin: CanvasExPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
+		this.loadModelOptions();
+	}
+
+	async loadModelOptions() {
+		try {
+			// プラグインディレクトリの絶対パスを取得
+			const pluginId = this.plugin.manifest.id;
+			const configDir = this.plugin.app.vault.configDir;
+			const modelsPath = `${configDir}/plugins/${pluginId}/models.json`;
+			const jsonStr = await this.plugin.app.vault.adapter.read(modelsPath);
+			const json = JSON.parse(jsonStr);
+			if (Array.isArray(json) && json.every(m => m.value && m.label)) {
+				this.modelOptions = json;
+			}
+		} catch (e) {
+			// 読み込み失敗時はデフォルトリスト
+		}
 	}
 
 	display(): void {
@@ -1132,6 +1163,19 @@ class CanvasExSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 			);
+
+		// モデル選択UI（models.jsonから）
+		new Setting(containerEl)
+			.setName('Groq モデル')
+			.setDesc('Groq APIで使用するモデルを選択')
+			.addDropdown(drop => {
+				this.modelOptions.forEach(opt => drop.addOption(opt.value, opt.label));
+				drop.setValue(this.plugin.settings.groqModel || 'llama3-8b-8192');
+				drop.onChange(async (value) => {
+					this.plugin.settings.groqModel = value;
+					await this.plugin.saveSettings();
+				});
+			});
 
 		// 追加: デフォルトメッセージ設定
 		new Setting(containerEl)
@@ -1167,7 +1211,7 @@ class GroqChatModal extends Modal {
 		contentEl.empty();
 		contentEl.createEl('h2', { text: 'Groq Chat Completion' });
 
-		let model = 'llama3-8b-8192';
+		let model = this.plugin.settings.groqModel || 'llama3-8b-8192';
 		let message = this.defaultMessage || '';
 
 		// モデル名入力
