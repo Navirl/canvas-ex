@@ -159,72 +159,16 @@ export default class CanvasExPlugin extends Plugin {
 						console.log('Groq API レスポンス:', res);
 						new Notice('Groq API レスポンスをコンソールに出力しました');
 
-						// === ここからノード追加 ===
-						// レスポンス内容取得（res.choices[0].message.content など）
-						const responseText = res.choices?.[0]?.message?.content || res.choices?.[0]?.text || JSON.stringify(res);
-						// canvasオブジェクト取得
-						const activeLeaf = this.app.workspace.activeLeaf;
-						let canvasView = null;
-						if (activeLeaf && activeLeaf.view) {
-							const viewType = activeLeaf.view.getViewType ? activeLeaf.view.getViewType() : null;
-							if (viewType === 'canvas') {
-								canvasView = activeLeaf.view;
-							}
-						}
-						if (!canvasView) {
-							const canvasLeaves = this.app.workspace.getLeavesOfType('canvas');
-							if (canvasLeaves.length > 0) {
-								canvasView = canvasLeaves[0].view;
-							}
-						}
-						if (!canvasView) {
-							new Notice('Canvasビューが見つかりません。');
-							return;
-						}
-						const canvas = (canvasView as any).canvas;
-						if (!canvas) {
-							new Notice('canvasオブジェクトが見つかりません');
-							return;
-						}
-						console.log('ノード追加前:', canvas.nodes, 'Array?', Array.isArray(canvas.nodes), 'Map?', canvas.nodes instanceof Map);
-						const newNode = {
-							id: 'node-' + Date.now() + '-' + Math.random().toString(36).slice(2),
-							type: 'text',
-							text: responseText,
-							x: group.x + group.width + 40,
-							y: group.y + group.height - 60,
-							width: 300,
-							height: 120
-						};
-						if (canvas.nodes instanceof Map) {
-							canvas.nodes.set(newNode.id, newNode);
-						} else if (Array.isArray(canvas.nodes)) {
-							canvas.nodes.push(newNode);
-						}
-						if (canvas.data && Array.isArray(canvas.data.nodes)) {
-							canvas.data.nodes.push(newNode);
-						}
-						console.log('ノード追加後:', canvas.nodes, 'Array?', Array.isArray(canvas.nodes), 'Map?', canvas.nodes instanceof Map);
-						if (typeof canvas.requestSave === 'function' && typeof canvas.getData === 'function') {
-							try {
-								canvas.requestSave();
-							} catch (e) {
-								console.warn('requestSaveでエラー:', e);
-							}
-						}
-						if (typeof canvas.render === 'function') canvas.render();
-						new Notice('GroqレスポンスをCanvasに追加しました');
-
 						// 履歴に追加（canvasファイル直接編集時も必ず実行）
+						const responseText = res.choices?.[0]?.message?.content || res.choices?.[0]?.text || JSON.stringify(res);
 						const history: GroqNodeHistoryEntry[] = this.settings.groqNodeHistory || [];
 						history.unshift({
-							text: newNode.text,
+							text: responseText,
 							timestamp: Date.now()
 						});
 						if (history.length > 100) history.length = 100;
 						this.settings.groqNodeHistory = history;
 						await this.saveSettings();
-						// === ここまでノード追加 ===
 					} catch (e) {
 						console.error('Groq APIエラー:', e);
 						new Notice('Groq APIエラー: ' + e);
