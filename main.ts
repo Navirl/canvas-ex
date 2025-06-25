@@ -51,6 +51,8 @@ interface CanvasExSettings {
 	groqDefaultMessage?: string;
 	groqNodeHistory?: GroqNodeHistoryEntry[];
 	groqModel?: string;
+	groqExtractJsonOnly?: boolean;
+	groqExtractFields?: string;
 }
 
 const DEFAULT_SETTINGS: CanvasExSettings = {
@@ -58,6 +60,8 @@ const DEFAULT_SETTINGS: CanvasExSettings = {
 	groqDefaultMessage: '',
 	groqNodeHistory: [],
 	groqModel: 'llama3-8b-8192',
+	groqExtractJsonOnly: false,
+	groqExtractFields: '',
 };
 
 // 1. models.jsonの型
@@ -167,12 +171,61 @@ export default class CanvasExPlugin extends Plugin {
 						console.log('Groq API レスポンス:', res);
 						new Notice('Groq API レスポンスをコンソールに出力しました');
 
-						// 履歴に追加（canvasファイル直接編集時も必ず実行）
-						const responseText = res.choices?.[0]?.message?.content || res.choices?.[0]?.text || JSON.stringify(res);
+						let responseText = res.choices?.[0]?.message?.content || res.choices?.[0]?.text || JSON.stringify(res);
+						let nodeTexts: string[] = [];
+						if (this.settings.groqExtractJsonOnly) {
+							const extracted = extractFirstJson(responseText);
+							if (extracted) {
+								if (this.settings.groqExtractFields) {
+									// フィールドごとに分割
+									try {
+										const obj = JSON.parse(extracted);
+										const fieldList = this.settings.groqExtractFields.split(',').map(f => f.trim()).filter(f => f);
+										if (Array.isArray(obj)) {
+											// 配列の場合、各要素ごとにTextノード
+											for (const item of obj) {
+												const text = fieldList.map(f => formatField(item, f)).join('\n');
+												if (text.trim()) nodeTexts.push(text);
+											}
+										} else if (typeof obj === 'object' && obj) {
+											// オブジェクトの場合、フィールドが配列なら分割
+											let pushed = false;
+											for (const f of fieldList) {
+												const v = obj[f];
+												if (Array.isArray(v)) {
+													for (const vv of v) {
+														if (typeof vv === 'object') {
+															nodeTexts.push(`${f}: ${JSON.stringify(vv)}`);
+														} else {
+															nodeTexts.push(`${f}: ${vv}`);
+														}
+													}
+													pushed = true;
+												} 
+											}
+											if (!pushed) {
+												nodeTexts.push(fieldList.map(f => formatField(obj, f)).join('\n'));
+											}
+										} else {
+											nodeTexts.push(extracted);
+										}
+									} catch {
+										nodeTexts.push(extracted);
+									}
+								} else {
+									nodeTexts.push(extracted);
+								}
+							}
+						} else {
+							nodeTexts.push(responseText);
+						}
+						// 履歴追加
 						const history: GroqNodeHistoryEntry[] = this.settings.groqNodeHistory || [];
-						history.unshift({
-							text: responseText,
-							timestamp: Date.now()
+						nodeTexts.forEach(text => {
+							history.unshift({
+								text,
+								timestamp: Date.now()
+							});
 						});
 						if (history.length > 100) history.length = 100;
 						this.settings.groqNodeHistory = history;
@@ -1006,8 +1059,51 @@ class CanvasNodesView extends ItemView {
 								console.log('Groq API レスポンス:', res);
 								new Notice('Groq API レスポンスをコンソールに出力しました');
 
-								// === ここからcanvasファイル直接編集 ===
-								const responseText = res.choices?.[0]?.message?.content || res.choices?.[0]?.text || JSON.stringify(res);
+								let responseText = res.choices?.[0]?.message?.content || res.choices?.[0]?.text || JSON.stringify(res);
+								let nodeTexts: string[] = [];
+								if (this.plugin.settings.groqExtractJsonOnly) {
+									const extracted = extractFirstJson(responseText);
+									if (extracted) {
+										if (this.plugin.settings.groqExtractFields) {
+											try {
+												const obj = JSON.parse(extracted);
+												const fieldList = this.plugin.settings.groqExtractFields.split(',').map(f => f.trim()).filter(f => f);
+												if (Array.isArray(obj)) {
+													for (const item of obj) {
+														const text = fieldList.map(f => formatField(item, f)).join('\n');
+														if (text.trim()) nodeTexts.push(text);
+													}
+												} else if (typeof obj === 'object' && obj) {
+													let pushed = false;
+													for (const f of fieldList) {
+														const v = obj[f];
+														if (Array.isArray(v)) {
+															for (const vv of v) {
+																if (typeof vv === 'object') {
+																	nodeTexts.push(`${f}: ${JSON.stringify(vv)}`);
+																} else {
+																	nodeTexts.push(`${f}: ${vv}`);
+																}
+															}
+															pushed = true;
+														}
+													}
+													if (!pushed) {
+														nodeTexts.push(fieldList.map(f => formatField(obj, f)).join('\n'));
+													}
+												} else {
+													nodeTexts.push(extracted);
+												}
+											} catch {
+												nodeTexts.push(extracted);
+											}
+										} else {
+											nodeTexts.push(extracted);
+										}
+									}
+								} else {
+									nodeTexts.push(responseText);
+								}
 								// 現在開いているcanvasファイルを取得
 								const activeLeaf = this.plugin.app.workspace.activeLeaf;
 								let canvasFile: TFile | null = null;
@@ -1035,28 +1131,34 @@ class CanvasNodesView extends ItemView {
 								if (!Array.isArray(json.nodes)) {
 									json.nodes = [];
 								}
-								const newNode = {
-									id: 'node-' + Date.now() + '-' + Math.random().toString(36).slice(2),
-									type: 'text',
-									text: responseText,
-									x: group.x + group.width + 40,
-									y: group.y + group.height - 60,
-									width: 300,
-									height: 120
-								};
-								json.nodes.push(newNode);
-								// 履歴に追加（canvasファイル直接編集時も必ず実行）
+								// ノードを複数追加
+								let baseX = group.x + group.width + 40;
+								let baseY = group.y + group.height - 60;
+								nodeTexts.forEach((text, idx) => {
+									const newNode = {
+										id: 'node-' + Date.now() + '-' + Math.random().toString(36).slice(2),
+										type: 'text',
+										text,
+										x: baseX,
+										y: baseY + idx * 130,
+										width: 300,
+										height: 120
+									};
+									json.nodes.push(newNode);
+								});
+								// 履歴に追加
 								const history: GroqNodeHistoryEntry[] = this.plugin.settings.groqNodeHistory || [];
-								history.unshift({
-									text: newNode.text,
-									timestamp: Date.now()
+								nodeTexts.forEach(text => {
+									history.unshift({
+										text,
+										timestamp: Date.now()
+									});
 								});
 								if (history.length > 100) history.length = 100;
 								this.plugin.settings.groqNodeHistory = history;
 								await this.plugin.saveSettings();
 								await this.plugin.app.vault.modify(canvasFile, JSON.stringify(json, null, 2));
 								new Notice('GroqレスポンスをCanvasファイルに追加しました。再読み込みしてください。');
-								// === ここまでcanvasファイル直接編集 ===
 							} catch (e) {
 								console.error('Groq APIエラー:', e);
 								new Notice('Groq APIエラー: ' + e);
@@ -1190,6 +1292,31 @@ class CanvasExSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 			);
+
+		// 追加: JSON抽出設定
+		new Setting(containerEl)
+			.setName('JSONのみ抽出して出力に使う')
+			.setDesc('Groq APIの出力から最初に見つかったJSON部分だけを履歴やノードに反映します')
+			.addToggle(toggle =>
+				toggle.setValue(this.plugin.settings.groqExtractJsonOnly || false)
+				.onChange(async (value) => {
+					this.plugin.settings.groqExtractJsonOnly = value;
+					await this.plugin.saveSettings();
+				})
+			);
+
+		// 追加: JSON抽出フィールド
+		new Setting(containerEl)
+			.setName('抽出フィールド（カンマ区切り）')
+			.setDesc('JSONから抽出してTextノードに使うフィールド名をカンマ区切りで指定（例: name,objective）')
+			.addText(text =>
+				text.setPlaceholder('例: name,objective')
+				.setValue(this.plugin.settings.groqExtractFields || '')
+				.onChange(async (value) => {
+					this.plugin.settings.groqExtractFields = value;
+					await this.plugin.saveSettings();
+				})
+			);
 	}
 }
 
@@ -1267,4 +1394,54 @@ function applyGroupTemplate(template: string, textNodes: any[]): string {
 		result = result.replace(re, textNodes[i]?.text ?? '');
 	}
 	return result;
+}
+
+// === ユーティリティ: JSON抽出関数 ===
+function extractFirstJson(text: string): string | null {
+	const arrMatch = text.match(/\[([\s\S]*?)]/);
+	if (arrMatch) {
+		try {
+			const json = JSON.parse(arrMatch[0]);
+			return JSON.stringify(json, null, 2);
+		} catch {}
+	}
+	const objMatch = text.match(/\{([\s\S]*?)}/);
+	if (objMatch) {
+		try {
+			const json = JSON.parse(objMatch[0]);
+			return JSON.stringify(json, null, 2);
+		} catch {}
+	}
+	return null;
+}
+
+// === ユーティリティ: JSONフィールド抽出関数 ===
+function extractFieldsFromJson(jsonStr: string, fields: string): string {
+	if (!fields || !jsonStr) return jsonStr;
+	let obj: any;
+	try {
+		obj = JSON.parse(jsonStr);
+	} catch {
+		return jsonStr;
+	}
+	const fieldList = fields.split(',').map(f => f.trim()).filter(f => f);
+	if (Array.isArray(obj)) {
+		return obj.map(item => fieldList.map(f => formatField(item, f)).join('\n')).join('\n---\n');
+	} else if (typeof obj === 'object' && obj) {
+		return fieldList.map(f => formatField(obj, f)).join('\n');
+	}
+	return jsonStr;
+}
+
+function formatField(item: any, field: string): string {
+	if (!item || !field) return '';
+	const value = item[field];
+	if (Array.isArray(value)) {
+		return `${field}:\n- ` + value.map(v => v.toString()).join('\n- ');
+	} else if (typeof value === 'object' && value) {
+		return `${field}: ` + JSON.stringify(value);
+	} else if (value !== undefined) {
+		return `${field}: ${value}`;
+	}
+	return '';
 }
