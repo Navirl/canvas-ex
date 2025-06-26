@@ -48,7 +48,7 @@ interface GroqNodeHistoryEntry {
 }
 
 // 設定インターフェース
-interface GroqDefaultMessage {
+export interface GroqDefaultMessage {
 	id: string;
 	label: string;
 	message: string;
@@ -297,9 +297,6 @@ export default class CanvasExPlugin extends Plugin {
 			// 他のプラグインとの競合を避けるため、安全に初期化
 			if (typeof window !== 'undefined') {
 				// 既存の関数が存在する場合は削除
-				if ((window as any).getCanvasNodes) {
-					delete (window as any).getCanvasNodes;
-				}
 				if ((window as any).getCanvasData) {
 					delete (window as any).getCanvasData;
 				}
@@ -308,7 +305,6 @@ export default class CanvasExPlugin extends Plugin {
 				}
 
 				// 新しい関数を登録
-				(window as any).getCanvasNodes = this.getCanvasNodes.bind(this);
 				(window as any).getCanvasData = this.getCanvasData.bind(this);
 				(window as any).logCanvasNodes = this.logCanvasNodes.bind(this);
 
@@ -316,7 +312,6 @@ export default class CanvasExPlugin extends Plugin {
 
 				console.log('Canvas Ex plugin has been loaded');
 				console.log('The following functions are now available:');
-				console.log('- getCanvasNodes(): Get all nodes of the current canvas');
 				console.log('- getCanvasData(): Get complete data of the current canvas');
 				console.log('- logCanvasNodes(): Output node information to the console');
 			}
@@ -329,108 +324,12 @@ export default class CanvasExPlugin extends Plugin {
 		try {
 			this.isInitialized = false;
 			console.log('Canvas Ex plugin has been unloaded');
-			
-			// グローバル関数を削除
 			if (typeof window !== 'undefined') {
-				delete (window as any).getCanvasNodes;
 				delete (window as any).getCanvasData;
 				delete (window as any).logCanvasNodes;
 			}
 		} catch (error) {
 			console.error('Canvas Ex plugin unload error:', error);
-		}
-	}
-
-	/**
-	 * 現在開いているcanvasの全てのノードを取得
-	 */
-	getCanvasNodes(): CanvasNodeData[] {
-		try {
-			// まず、アクティブなビューがcanvasかどうかをチェック
-			const activeLeaf = this.app.workspace.activeLeaf;
-			let canvasView = null;
-
-			if (activeLeaf && activeLeaf.view) {
-				const viewType = activeLeaf.view.getViewType ? activeLeaf.view.getViewType() : null;
-				if (viewType === 'canvas') {
-					canvasView = activeLeaf.view;
-				}
-			}
-
-			// アクティブなビューがcanvasでない場合は、開いているcanvasを探す
-			if (!canvasView) {
-				const canvasLeaves = this.app.workspace.getLeavesOfType('canvas');
-				if (canvasLeaves.length > 0) {
-					canvasView = canvasLeaves[0].view;
-				}
-			}
-
-			if (!canvasView) {
-				return [];
-			}
-
-			// canvasオブジェクトを取得
-			const canvas = (canvasView as any).canvas;
-			if (!canvas) {
-				return [];
-			}
-
-			// 複数のアプローチでノードを取得
-			let nodes: CanvasNode[] = [];
-
-			// アプローチ1: canvas.nodesから直接取得
-			if (canvas.nodes && Array.isArray(canvas.nodes)) {
-				nodes = (canvas.nodes as CanvasNode[]).filter((node: CanvasNode) => node && node.id);
-			}
-
-			// アプローチ2: canvas.data.nodesから取得
-			if (nodes.length === 0 && canvas.data && canvas.data.nodes && Array.isArray(canvas.data.nodes)) {
-				nodes = (canvas.data.nodes as CanvasNode[]).filter((node: CanvasNode) => node && node.id);
-			}
-
-			// アプローチ3: canvas.getData()から取得
-			if (nodes.length === 0 && typeof canvas.getData === 'function') {
-				try {
-					const data = canvas.getData();
-					if (data && data.nodes && Array.isArray(data.nodes)) {
-						nodes = (data.nodes as CanvasNode[]).filter((node: CanvasNode) => node && node.id);
-					}
-				} catch (e) {
-					// エラーを無視
-				}
-			}
-
-			// アプローチ4: canvas.viewから取得
-			if (nodes.length === 0 && canvas.view && canvas.view.nodes && Array.isArray(canvas.view.nodes)) {
-				nodes = (canvas.view.nodes as CanvasNode[]).filter((node: CanvasNode) => node && node.id);
-			}
-			
-			if (nodes.length === 0) {
-				return [];
-			}
-
-			const result = nodes.map(node => ({
-				id: node.id,
-				x: node.x,
-				y: node.y,
-				width: node.width,
-				height: node.height,
-				color: node.color,
-				type: node.type,
-				// ノードタイプに応じた追加情報
-				...(node.type === 'file' && { file: node.file, subpath: node.subpath }),
-				...(node.type === 'text' && { text: node.text }),
-				...(node.type === 'link' && { url: node.url }),
-				...(node.type === 'group' && { 
-					label: node.label, 
-					background: node.background, 
-					backgroundStyle: node.backgroundStyle 
-				})
-			}));
-
-			return result;
-		} catch (error) {
-			return [];
 		}
 	}
 
@@ -490,27 +389,21 @@ export default class CanvasExPlugin extends Plugin {
 	 */
 	logCanvasNodes(): void {
 		try {
-			const nodes = this.getCanvasNodes();
-			
+			const nodes = this.getCanvasData()?.nodes ?? [];
 			if (nodes.length === 0) {
 				console.log('No nodes found');
 				return;
 			}
-
 			console.log(`=== Canvas node information (${nodes.length} nodes) ===`);
-			
 			nodes.forEach((node, index) => {
 				console.log(`\n--- Node ${index + 1} ---`);
 				console.log(`ID: ${node.id}`);
 				console.log(`Type: ${node.type || 'Unknown'}`);
 				console.log(`Position: (${node.x}, ${node.y})`);
 				console.log(`Size: ${node.width} x ${node.height}`);
-				
 				if (node.color) {
 					console.log(`Color: ${node.color}`);
 				}
-
-				// タイプ別の追加情報
 				switch (node.type) {
 					case 'file':
 						console.log(`File: ${node.file}`);
@@ -537,8 +430,6 @@ export default class CanvasExPlugin extends Plugin {
 						break;
 				}
 			});
-
-			// エッジ情報も取得
 			const canvasData = this.getCanvasData();
 			if (canvasData && canvasData.edges && canvasData.edges.length > 0) {
 				console.log(`\n=== Edge information (${canvasData.edges.length} edges) ===`);

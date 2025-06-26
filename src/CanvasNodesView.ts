@@ -1,6 +1,6 @@
 import { ItemView, WorkspaceLeaf, Notice, TFile } from 'obsidian';
 import { postGroqChatCompletion } from './groqApi';
-import type CanvasExPlugin from './main';
+import CanvasExPlugin, { GroqDefaultMessage } from './main';
 
 // 必要な型を再定義またはimport
 interface CanvasNode {
@@ -171,12 +171,12 @@ export class CanvasNodesView extends ItemView {
 		if (this.currentTab === 'history') tabs[1].classList.add('active');
 
 		if (this.currentTab === 'nodes') {
-			let nodes = this.plugin.getCanvasNodes();
+			let nodes = (this.plugin.getCanvasData()?.nodes ?? []) as CanvasNode[];
 
 			// === エッジを仮想ノードとして追加 ===
 			const canvasData = this.plugin.getCanvasData();
 			if (canvasData && Array.isArray(canvasData.edges)) {
-				const edgeNodes = canvasData.edges.map((edge: any) => ({
+				const edgeNodes = canvasData.edges.map((edge: any): CanvasNode => ({
 					id: edge.id,
 					type: 'edge',
 					fromNode: edge.fromNode,
@@ -185,7 +185,6 @@ export class CanvasNodesView extends ItemView {
 					toSide: edge.toSide,
 					label: edge.label,
 					color: edge.color,
-					// 仮の座標
 					x: 0, y: 0, width: 0, height: 0
 				}));
 				nodes = [...nodes, ...edgeNodes];
@@ -193,11 +192,11 @@ export class CanvasNodesView extends ItemView {
 
 			// === 追加: タイプフィルター ===
 			if (this.filterType !== 'all') {
-				nodes = nodes.filter(n => n.type === this.filterType);
+				nodes = nodes.filter((n: CanvasNode) => n.type === this.filterType);
 			}
 			// === 追加: Groupラベル検索 ===
 			if (this.filterType === 'group' && this.labelQuery.trim() !== '') {
-				nodes = nodes.filter(n => typeof n.label === 'string' && n.label.includes(this.labelQuery.trim()));
+				nodes = nodes.filter((n: CanvasNode) => typeof n.label === 'string' && n.label.includes(this.labelQuery.trim()));
 			}
 			if (nodes.length === 0) {
 				const hasCanvasOpen = this.plugin.hasCanvasOpen();
@@ -221,7 +220,7 @@ export class CanvasNodesView extends ItemView {
 			const nodesList = this.nodesContainer.createEl('div', {
 				cls: 'canvas-ex-nodes-list'
 			});
-			nodes.forEach((node, index) => {
+			nodes.forEach((node: CanvasNode, index: number) => {
 				const nodeEl = nodesList.createEl('div', {
 					cls: 'canvas-ex-node-item'
 				});
@@ -304,292 +303,4 @@ export class CanvasNodesView extends ItemView {
 					case 'group':
 						if (node.label) {
 							detailsEl.createEl('div', {
-								text: `Label: ${node.label}`,
-								cls: 'canvas-ex-node-label'
-							});
-						}
-						if (node.background) {
-							detailsEl.createEl('div', {
-								text: `Background: ${node.background}`,
-								cls: 'canvas-ex-node-background'
-							});
-						}
-						break;
-					case 'edge':
-						detailsEl.createEl('div', {
-							text: `From: ${node.fromNode} (${node.fromSide}) → To: ${node.toNode} (${node.toSide})`,
-							cls: 'canvas-ex-edge-fromto'
-						});
-						if (node.label) {
-							detailsEl.createEl('div', {
-								text: `Label: ${node.label}`,
-								cls: 'canvas-ex-edge-label'
-							});
-						}
-						break;
-				}
-
-				// グループノード用右クリックメニュー
-				if (node.type === 'group') {
-					nodeEl.addEventListener('contextmenu', async (e) => {
-						e.preventDefault();
-						document.querySelectorAll('.canvasex-context-menu').forEach(el => el.remove());
-
-						// メニュー作成
-						const menu = document.createElement('div');
-						menu.className = 'canvasex-context-menu';
-						menu.style.position = 'fixed';
-						menu.style.zIndex = '9999';
-						menu.style.left = `${e.clientX}px`;
-						menu.style.top = `${e.clientY}px`;
-						menu.style.background = 'var(--background-primary, #222)';
-						menu.style.border = '1px solid var(--background-modifier-border, #444)';
-						menu.style.borderRadius = '6px';
-						menu.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
-						menu.style.padding = '4px 0';
-						menu.style.minWidth = '220px';
-
-						// 1. グループ内テキストノード一覧を出力
-						const itemList = document.createElement('div');
-						itemList.textContent = 'Output list of text nodes in the group';
-						itemList.style.padding = '8px 16px';
-						itemList.style.cursor = 'pointer';
-						itemList.style.color = 'var(--text-normal, #fff)';
-						itemList.addEventListener('mouseenter', () => {
-							itemList.style.background = 'var(--background-secondary, #333)';
-						});
-						itemList.addEventListener('mouseleave', () => {
-							itemList.style.background = '';
-						});
-						itemList.onclick = () => {
-							menu.remove();
-							// groupノードの範囲内にあるtextノードを抽出
-							const allNodes = this.plugin.getCanvasNodes();
-							const group = node;
-							const texts = allNodes.filter(n =>
-								n.type === 'text' &&
-								typeof n.x === 'number' && typeof n.y === 'number' &&
-								typeof n.width === 'number' && typeof n.height === 'number' &&
-								n.x >= group.x &&
-								n.y >= group.y &&
-								(n.x + n.width) <= (group.x + group.width) &&
-								(n.y + n.height) <= (group.y + group.height)
-							);
-							if (texts.length === 0) {
-								new Notice('No text nodes in the group');
-								return;
-							}
-							let msg = 'List of text nodes in the group:\n';
-							texts.forEach(t => {
-								msg += `ID: ${t.id}\nContent: ${t.text}\n---\n`;
-							});
-							console.log(msg);
-							new Notice('List of text nodes in the group has been output to the console');
-						};
-						menu.appendChild(itemList);
-
-						// 2. POST to Groq
-						const itemPost = document.createElement('div');
-						itemPost.textContent = 'POST to Groq';
-						itemPost.style.padding = '8px 16px';
-						itemPost.style.cursor = 'pointer';
-						itemPost.style.color = 'var(--text-normal, #fff)';
-						itemPost.addEventListener('mouseenter', () => {
-							itemPost.style.background = 'var(--background-secondary, #333)';
-						});
-						itemPost.addEventListener('mouseleave', () => {
-							itemPost.style.background = '';
-						});
-						itemPost.onclick = async () => {
-							menu.remove();
-							const apiKey = this.plugin.settings.groqApiKey;
-							const msgObj = (this.plugin.settings.groqDefaultMessages || []).find(m => m.id === this.plugin.settings.groqDefaultMessageId) || { message: '' };
-							const defaultMsg = msgObj.message || '';
-							const group = node;
-							const allNodes = this.plugin.getCanvasNodes();
-							const texts = allNodes.filter(n =>
-								n.type === 'text' &&
-								typeof n.x === 'number' && typeof n.y === 'number' &&
-								typeof n.width === 'number' && typeof n.height === 'number' &&
-								n.x >= group.x &&
-								n.y >= group.y &&
-								(n.x + n.width) <= (group.x + group.width) &&
-								(n.y + n.height) <= (group.y + group.height)
-							).sort((a, b) => a.y - b.y || a.x - b.x);
-							let content = '';
-							if (defaultMsg) {
-								content = applyGroupTemplate(defaultMsg, texts);
-							} else {
-								content = texts.map(t => t.text).join('\n');
-							}
-							if (!apiKey) {
-								new Notice('Groq API key is not set. Please enter your API key in the plugin settings.');
-								return;
-							}
-							new Notice('Posting to Groq...');
-							try {
-								const res = await postGroqChatCompletion(apiKey, {
-									model: this.plugin.settings.groqModel || 'llama3-8b-8192',
-									messages: [
-										{ role: 'user', content }
-									]
-								});
-								console.log('Groq API response:', res);
-								new Notice('Groq API response has been output to the console');
-
-								let responseText = res.choices?.[0]?.message?.content || res.choices?.[0]?.text || JSON.stringify(res);
-								let nodeTexts: string[] = [];
-								if (this.plugin.settings.groqExtractJsonOnly) {
-									const extracted = extractFirstJson(responseText);
-									if (extracted) {
-										if (this.plugin.settings.groqExtractFields) {
-											try {
-												const obj = JSON.parse(extracted);
-												const fieldList = this.plugin.settings.groqExtractFields.split(',').map(f => f.trim()).filter(f => f);
-												if (Array.isArray(obj)) {
-													for (const item of obj) {
-														const text = fieldList.map(f => formatField(item, f)).join('\n');
-														if (text.trim()) nodeTexts.push(text);
-													}
-												} else if (typeof obj === 'object' && obj) {
-													let pushed = false;
-													for (const f of fieldList) {
-														const v = obj[f];
-														if (Array.isArray(v)) {
-															for (const vv of v) {
-																if (typeof vv === 'object') {
-																	nodeTexts.push(`${f}: ${JSON.stringify(vv)}`);
-																} else {
-																	nodeTexts.push(`${f}: ${vv}`);
-																}
-														}
-														pushed = true;
-													}
-												}
-												if (!pushed) {
-													nodeTexts.push(fieldList.map(f => formatField(obj, f)).join('\n'));
-												}
-											} else {
-												nodeTexts.push(extracted);
-											}
-										} catch {
-											nodeTexts.push(extracted);
-										}
-									} else {
-										nodeTexts.push(extracted);
-									}
-								}
-							} else {
-								nodeTexts.push(responseText);
-							}
-							// 現在開いているcanvasファイルを取得
-							const activeLeaf = this.plugin.app.workspace.activeLeaf;
-							let canvasFile: TFile | null = null;
-							if (activeLeaf && activeLeaf.view && typeof (activeLeaf.view as any).file === 'object') {
-								canvasFile = (activeLeaf.view as any).file as TFile;
-							}
-							if (!canvasFile) {
-								const canvasLeaves = this.plugin.app.workspace.getLeavesOfType('canvas');
-								if (canvasLeaves.length > 0 && typeof (canvasLeaves[0].view as any).file === 'object') {
-									canvasFile = (canvasLeaves[0].view as any).file as TFile;
-								}
-							}
-							if (!canvasFile) {
-								new Notice('Canvas file not found.');
-								return;
-							}
-							const fileContent = await this.plugin.app.vault.read(canvasFile);
-							let json: any;
-							try {
-								json = JSON.parse(fileContent);
-							} catch (e) {
-								new Notice('Failed to parse Canvas file JSON');
-								return;
-							}
-							if (!Array.isArray(json.nodes)) {
-								json.nodes = [];
-							}
-							// ノードを複数追加
-							let baseX = group.x + group.width + 40;
-							let baseY = group.y + group.height - 60;
-							nodeTexts.forEach((text, idx) => {
-								const newNode = {
-									id: 'node-' + Date.now() + '-' + Math.random().toString(36).slice(2),
-									type: 'text',
-									text,
-									x: baseX,
-									y: baseY + idx * 130,
-									width: 300,
-									height: 120
-								};
-								json.nodes.push(newNode);
-							});
-							// 履歴に追加
-							const history: GroqNodeHistoryEntry[] = this.plugin.settings.groqNodeHistory || [];
-							nodeTexts.forEach(text => {
-								history.unshift({
-									text,
-									timestamp: Date.now()
-								});
-							});
-							if (history.length > 100) history.length = 100;
-							this.plugin.settings.groqNodeHistory = history;
-							await this.plugin.saveSettings();
-							await this.plugin.app.vault.modify(canvasFile, JSON.stringify(json, null, 2));
-							new Notice('Groq response added to Canvas file. Please reload.');
-						} catch (e) {
-							console.error('Groq API error:', e);
-							new Notice('Groq API error: ' + e);
-						}
-						};
-						menu.appendChild(itemPost);
-
-						document.body.appendChild(menu);
-
-						// メニュー外クリックで消す
-						const removeMenu = (ev: MouseEvent) => {
-							if (!menu.contains(ev.target as Node)) {
-								menu.remove();
-								document.removeEventListener('mousedown', removeMenu);
-							}
-						};
-						setTimeout(() => {
-							document.addEventListener('mousedown', removeMenu);
-						}, 0);
-					});
-				}
-			});
-		} else {
-			// === 履歴タブ ===
-			const history: GroqNodeHistoryEntry[] = this.plugin.settings.groqNodeHistory || [];
-			if (history.length === 0) {
-				this.nodesContainer.createEl('p', {
-					text: 'No node history added via Groq',
-					cls: 'canvas-ex-nodes-empty'
-				});
-				return;
-			}
-			this.nodesContainer.createEl('p', {
-				text: `History count: ${history.length}`,
-				cls: 'canvas-ex-nodes-count'
-			});
-			const historyList = this.nodesContainer.createEl('div', {
-				cls: 'canvas-ex-nodes-list'
-			});
-			history.forEach((entry, idx) => {
-				const item = historyList.createEl('div', { cls: 'canvas-ex-node-item' });
-				item.createEl('div', { text: `${idx + 1}. ${entry.text.length > 40 ? entry.text.substring(0, 40) + '...' : entry.text}` });
-				item.createEl('div', { text: `Added at: ${new Date(entry.timestamp).toLocaleString()}` });
-
-				// --- ドラッグ＆ドロップ用 ---
-				item.setAttr('draggable', 'true');
-				item.addEventListener('dragstart', (e: DragEvent) => {
-					if (e.dataTransfer) {
-						e.dataTransfer.setData('text/plain', entry.text);
-						e.dataTransfer.effectAllowed = 'copy';
-					}
-				});
-			});
-		}
-	}
-} 
+								text: `
