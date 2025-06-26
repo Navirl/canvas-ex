@@ -439,25 +439,31 @@ export default class CanvasExPlugin extends Plugin {
 	 */
 	getCanvasData(): CanvasData | null {
 		try {
-			// より安全な方法でアクティブなビューを取得
+			// まず、アクティブなビューがcanvasかどうかをチェック
 			const activeLeaf = this.app.workspace.activeLeaf;
-			if (!activeLeaf) {
-				return null;
+			let canvasView = null;
+
+			if (activeLeaf && activeLeaf.view) {
+				const viewType = activeLeaf.view.getViewType ? activeLeaf.view.getViewType() : null;
+				if (viewType === 'canvas') {
+					canvasView = activeLeaf.view;
+				}
 			}
 
-			const activeView = activeLeaf.view;
-			if (!activeView) {
-				return null;
+			// アクティブなビューがcanvasでない場合は、開いているcanvasを探す
+			if (!canvasView) {
+				const canvasLeaves = this.app.workspace.getLeavesOfType('canvas');
+				if (canvasLeaves.length > 0) {
+					canvasView = canvasLeaves[0].view;
+				}
 			}
 
-			// ビュータイプを安全に確認
-			const viewType = activeView.getViewType ? activeView.getViewType() : null;
-			if (viewType !== 'canvas') {
+			if (!canvasView) {
 				return null;
 			}
 
 			// canvasオブジェクトを取得
-			const canvas = (activeView as any).canvas;
+			const canvas = (canvasView as any).canvas;
 			if (!canvas) {
 				return null;
 			}

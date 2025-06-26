@@ -172,6 +172,25 @@ export class CanvasNodesView extends ItemView {
 
 		if (this.currentTab === 'nodes') {
 			let nodes = this.plugin.getCanvasNodes();
+
+			// === エッジを仮想ノードとして追加 ===
+			const canvasData = this.plugin.getCanvasData();
+			if (canvasData && Array.isArray(canvasData.edges)) {
+				const edgeNodes = canvasData.edges.map((edge: any) => ({
+					id: edge.id,
+					type: 'edge',
+					fromNode: edge.fromNode,
+					toNode: edge.toNode,
+					fromSide: edge.fromSide,
+					toSide: edge.toSide,
+					label: edge.label,
+					color: edge.color,
+					// 仮の座標
+					x: 0, y: 0, width: 0, height: 0
+				}));
+				nodes = [...nodes, ...edgeNodes];
+			}
+
 			// === 追加: タイプフィルター ===
 			if (this.filterType !== 'all') {
 				nodes = nodes.filter(n => n.type === this.filterType);
@@ -227,15 +246,17 @@ export class CanvasNodesView extends ItemView {
 					cls: 'canvas-ex-node-details'
 				});
 
-				detailsEl.createEl('div', {
-					text: `Position: (${node.x}, ${node.y})`,
-					cls: 'canvas-ex-node-position'
-				});
+				if (node.type !== 'edge') {
+					detailsEl.createEl('div', {
+						text: `Position: (${node.x}, ${node.y})`,
+						cls: 'canvas-ex-node-position'
+					});
 
-				detailsEl.createEl('div', {
-					text: `Size: ${node.width} x ${node.height}`,
-					cls: 'canvas-ex-node-size'
-				});
+					detailsEl.createEl('div', {
+						text: `Size: ${node.width} x ${node.height}`,
+						cls: 'canvas-ex-node-size'
+					});
+				}
 
 				if (node.color) {
 					detailsEl.createEl('div', {
@@ -291,6 +312,18 @@ export class CanvasNodesView extends ItemView {
 							detailsEl.createEl('div', {
 								text: `Background: ${node.background}`,
 								cls: 'canvas-ex-node-background'
+							});
+						}
+						break;
+					case 'edge':
+						detailsEl.createEl('div', {
+							text: `From: ${node.fromNode} (${node.fromSide}) → To: ${node.toNode} (${node.toSide})`,
+							cls: 'canvas-ex-edge-fromto'
+						});
+						if (node.label) {
+							detailsEl.createEl('div', {
+								text: `Label: ${node.label}`,
+								cls: 'canvas-ex-edge-label'
 							});
 						}
 						break;
