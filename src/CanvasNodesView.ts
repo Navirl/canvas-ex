@@ -529,8 +529,8 @@ export class CanvasNodesView extends ItemView {
 										json.nodes = [];
 									}
 									// ノードを複数追加
-									let baseX = group.x + group.width + 40;
-									let baseY = group.y + group.height - 60;
+									let baseX = node.x + node.width + 40;
+									let baseY = node.y + node.height - 60;
 									nodeTexts.forEach((text, idx) => {
 										const newNode = {
 											id: 'node-' + Date.now() + '-' + Math.random().toString(36).slice(2),
@@ -623,6 +623,15 @@ export class CanvasNodesView extends ItemView {
 					detailsEl.createEl('div', {
 						text: `Text: ${entry.text}`,
 						cls: 'canvas-ex-node-text'
+					});
+
+					// --- ドラッグ＆ドロップ用 ---
+					entryEl.setAttr('draggable', 'true');
+					entryEl.addEventListener('dragstart', (e: DragEvent) => {
+						if (e.dataTransfer) {
+							e.dataTransfer.setData('text/plain', entry.text);
+							e.dataTransfer.effectAllowed = 'copy';
+						}
 					});
 				});
 			}
