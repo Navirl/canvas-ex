@@ -705,22 +705,6 @@ class GroqChatModal extends Modal {
 	}
 }
 
-// テンプレート置換関数
-function applyTemplate(template: string, node: any): string {
-	// {{text1}} → node.text
-	return template.replace(/\{\{\s*text1\s*\}\}/g, node.text ?? '');
-}
-
-// テンプレート置換関数（複数text対応）
-function applyGroupTemplate(template: string, textNodes: any[]): string {
-	let result = template;
-	for (let i = 0; i < textNodes.length; i++) {
-		const re = new RegExp(`\\{\\{\\s*text${i+1}\\s*\\}}`, 'g');
-		result = result.replace(re, textNodes[i]?.text ?? '');
-	}
-	return result;
-}
-
 // === ユーティリティ: JSON抽出関数 ===
 function extractFirstJson(text: string): string | null {
 	const arrMatch = text.match(/\[([\s\S]*?)]/);
@@ -738,24 +722,6 @@ function extractFirstJson(text: string): string | null {
 		} catch {}
 	}
 	return null;
-}
-
-// === ユーティリティ: JSONフィールド抽出関数 ===
-function extractFieldsFromJson(jsonStr: string, fields: string): string {
-	if (!fields || !jsonStr) return jsonStr;
-	let obj: any;
-	try {
-		obj = JSON.parse(jsonStr);
-	} catch {
-		return jsonStr;
-	}
-	const fieldList = fields.split(',').map(f => f.trim()).filter(f => f);
-	if (Array.isArray(obj)) {
-		return obj.map(item => fieldList.map(f => formatField(item, f)).join('\n')).join('\n---\n');
-	} else if (typeof obj === 'object' && obj) {
-		return fieldList.map(f => formatField(obj, f)).join('\n');
-	}
-	return jsonStr;
 }
 
 function formatField(item: any, field: string): string {
