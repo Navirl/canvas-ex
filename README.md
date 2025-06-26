@@ -1,5 +1,9 @@
 # Canvas Ex Plugin
 
+
+https://github.com/user-attachments/assets/83c263c2-f13c-47d4-aaaf-29030d79166e
+
+
 [日本語版READMEはこちら](./README.ja.md)
 
 > **Note:** Most of this repository was created using [Cursor](https://www.cursor.so/) (an AI pair programming tool).
