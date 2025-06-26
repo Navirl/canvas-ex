@@ -1,6 +1,6 @@
 import { ItemView, WorkspaceLeaf, Notice, TFile } from 'obsidian';
 import { postGroqChatCompletion } from './groqApi';
-import CanvasExPlugin, { GroqDefaultMessage } from './main';
+import type CanvasExPlugin from '../main';
 
 // 必要な型を再定義またはimport
 interface CanvasNode {
@@ -114,7 +114,7 @@ export class CanvasNodesView extends ItemView {
 		// タイプ選択
 		filterContainer.createEl('span', { text: 'Type:' });
 		const typeSelect = filterContainer.createEl('select');
-		['all', 'group', 'text', 'file', 'link'].forEach(type => {
+		['all', 'group', 'text', 'file', 'edge'].forEach(type => {
 			const opt = typeSelect.createEl('option', { text: type === 'all' ? 'All' : type });
 			opt.value = type;
 		});
@@ -292,15 +292,75 @@ export class CanvasNodesView extends ItemView {
 							});
 						}
 						break;
-					case 'link':
-						if (node.url) {
-							detailsEl.createEl('div', {
-								text: `URL: ${node.url}`,
-								cls: 'canvas-ex-node-url'
-							});
-						}
-						break;
 					case 'group':
 						if (node.label) {
 							detailsEl.createEl('div', {
-								text: `
+								text: `Label: ${node.label}`,
+								cls: 'canvas-ex-node-label'
+							});
+						}
+						if (node.background) {
+							detailsEl.createEl('div', {
+								text: `Background: ${node.background}`,
+								cls: 'canvas-ex-node-background'
+							});
+						}
+						if (node.backgroundStyle) {
+							detailsEl.createEl('div', {
+								text: `Background Style: ${node.backgroundStyle}`,
+								cls: 'canvas-ex-node-background'
+							});
+						}
+						break;
+				}
+			});
+		} else if (this.currentTab === 'history') {
+			// 履歴表示
+			const history = this.plugin.settings.groqNodeHistory || [];
+			if (history.length === 0) {
+				this.nodesContainer.createEl('p', {
+					text: 'No history entries found',
+					cls: 'canvas-ex-nodes-empty'
+				});
+			} else {
+				this.nodesContainer.createEl('p', {
+					text: `History count: ${history.length}`,
+					cls: 'canvas-ex-nodes-count'
+				});
+				const historyList = this.nodesContainer.createEl('div', {
+					cls: 'canvas-ex-nodes-list'
+				});
+				history.forEach((entry: GroqNodeHistoryEntry, index: number) => {
+					const entryEl = historyList.createEl('div', {
+						cls: 'canvas-ex-node-item'
+					});
+
+					// 履歴ヘッダー
+					const headerEl = entryEl.createEl('div', {
+						cls: 'canvas-ex-node-header'
+					});
+
+					headerEl.createEl('span', {
+						text: `${index + 1}. ${entry.text}`,
+						cls: 'canvas-ex-node-type'
+					});
+
+					headerEl.createEl('span', {
+						text: `Timestamp: ${new Date(entry.timestamp).toLocaleString()}`,
+						cls: 'canvas-ex-node-id'
+					});
+
+					// 履歴詳細
+					const detailsEl = entryEl.createEl('div', {
+						cls: 'canvas-ex-node-details'
+					});
+
+					detailsEl.createEl('div', {
+						text: `Text: ${entry.text}`,
+						cls: 'canvas-ex-node-text'
+					});
+				});
+			}
+		}
+	}
+}
