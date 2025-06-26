@@ -46,9 +46,16 @@ interface GroqNodeHistoryEntry {
 }
 
 // 設定インターフェース
+interface GroqDefaultMessage {
+	id: string;
+	label: string;
+	message: string;
+}
+
 interface CanvasExSettings {
 	groqApiKey: string;
-	groqDefaultMessage?: string;
+	groqDefaultMessages?: GroqDefaultMessage[];
+	groqDefaultMessageId?: string;
 	groqNodeHistory?: GroqNodeHistoryEntry[];
 	groqModel?: string;
 	groqExtractJsonOnly?: boolean;
@@ -57,7 +64,10 @@ interface CanvasExSettings {
 
 const DEFAULT_SETTINGS: CanvasExSettings = {
 	groqApiKey: '',
-	groqDefaultMessage: '',
+	groqDefaultMessages: [
+		{ id: 'default', label: 'Default', message: '' }
+	],
+	groqDefaultMessageId: 'default',
 	groqNodeHistory: [],
 	groqModel: 'llama3-8b-8192',
 	groqExtractJsonOnly: false,
@@ -157,7 +167,8 @@ export default class CanvasExPlugin extends Plugin {
 			name: 'Groq Chat Completion (API POST)',
 			callback: async () => {
 				const apiKey = this.settings.groqApiKey;
-				const defaultMsg = this.settings.groqDefaultMessage || '';
+				const msgObj = (this.settings.groqDefaultMessages || []).find(m => m.id === this.settings.groqDefaultMessageId) || { message: '' };
+				const defaultMsg = msgObj.message || '';
 				if (!apiKey) {
 					new Notice('Groq API key is not set. Please enter your API key in the plugin settings.');
 					return;
@@ -1046,7 +1057,8 @@ class CanvasNodesView extends ItemView {
 						itemPost.onclick = async () => {
 							menu.remove();
 							const apiKey = this.plugin.settings.groqApiKey;
-							const defaultMsg = this.plugin.settings.groqDefaultMessage || '';
+							const msgObj = (this.plugin.settings.groqDefaultMessages || []).find(m => m.id === this.plugin.settings.groqDefaultMessageId) || { message: '' };
+							const defaultMsg = msgObj.message || '';
 							const group = node;
 							const allNodes = this.plugin.getCanvasNodes();
 							const texts = allNodes.filter(n =>
@@ -1299,21 +1311,63 @@ class CanvasExSettingTab extends PluginSettingTab {
 				});
 			});
 
-		// 追加: デフォルトメッセージ設定
-		new Setting(containerEl)
-			.setName('Groq API default message')
-			.setDesc('Default message to send to Groq API via command or right-click')
-			.addTextArea(text =>
-				text
-					.setPlaceholder('Enter default message here')
-					.setValue(this.plugin.settings.groqDefaultMessage || '')
-					.onChange(async (value) => {
-						this.plugin.settings.groqDefaultMessage = value;
-						await this.plugin.saveSettings();
-					})
-			);
+		// === Input: Groq API Default Message Management ===
+		containerEl.createEl('h3', { text: 'Groq API Default Message Management (Input Template)' });
+		const msgList = this.plugin.settings.groqDefaultMessages || [];
+		const msgId = this.plugin.settings.groqDefaultMessageId || (msgList[0]?.id ?? '');
 
-		// 追加: JSON抽出設定
+		// 選択UI
+		new Setting(containerEl)
+			.setName('Select default message')
+			.setDesc('Choose the message template to send to Groq API')
+			.addDropdown(drop => {
+				msgList.forEach(m => drop.addOption(m.id, m.label));
+				drop.setValue(msgId);
+				drop.onChange(async (value) => {
+					this.plugin.settings.groqDefaultMessageId = value;
+					await this.plugin.saveSettings();
+				});
+			});
+
+		// メッセージ一覧・編集UI
+		msgList.forEach((msg, idx) => {
+			const s = new Setting(containerEl)
+				.setName(`Message: ${msg.label}`)
+				.addText(text => text.setValue(msg.label).onChange(async (v) => {
+					msg.label = v;
+					await this.plugin.saveSettings();
+				}))
+				.addTextArea(text => text.setValue(msg.message).onChange(async (v) => {
+					msg.message = v;
+					await this.plugin.saveSettings();
+				}));
+			// 削除ボタン
+			if (msgList.length > 1) {
+				s.addExtraButton(btn => btn.setIcon('trash').setTooltip('Delete').onClick(async () => {
+					this.plugin.settings.groqDefaultMessages = msgList.filter(m => m.id !== msg.id);
+					if (this.plugin.settings.groqDefaultMessageId === msg.id) {
+						this.plugin.settings.groqDefaultMessageId = this.plugin.settings.groqDefaultMessages[0]?.id ?? '';
+					}
+					await this.plugin.saveSettings();
+					this.display();
+				}));
+			}
+		});
+		// 追加ボタン
+		new Setting(containerEl)
+			.addButton(btn => btn.setButtonText('Add new message').onClick(async () => {
+				const newId = 'msg-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+				const newMsg = { id: newId, label: 'New Message', message: '' };
+				this.plugin.settings.groqDefaultMessages = [...msgList, newMsg];
+				this.plugin.settings.groqDefaultMessageId = newId;
+				await this.plugin.saveSettings();
+				this.display();
+			}));
+
+		// === Output: Groq API Response Extraction Settings ===
+		containerEl.createEl('hr');
+		containerEl.createEl('h3', { text: 'Groq API Response Extraction Settings (Output)' });
+
 		new Setting(containerEl)
 			.setName('Extract only JSON and use for output')
 			.setDesc('Only the first JSON part found in the Groq API output will be reflected in history and nodes.')
@@ -1325,7 +1379,6 @@ class CanvasExSettingTab extends PluginSettingTab {
 				})
 			);
 
-		// 追加: JSON抽出フィールド
 		new Setting(containerEl)
 			.setName('Extract fields (comma separated)')
 			.setDesc('Specify the field names to extract from JSON and use for Text nodes, separated by commas (e.g., name,objective)')
