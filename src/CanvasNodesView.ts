@@ -347,6 +347,235 @@ export class CanvasNodesView extends ItemView {
 								cls: 'canvas-ex-node-background'
 							});
 						}
+						// === 右クリックメニュー追加 ===
+						nodeEl.addEventListener('contextmenu', async (e) => {
+							e.preventDefault();
+							document.querySelectorAll('.canvasex-context-menu').forEach(el => el.remove());
+
+							// メニュー作成
+							const menu = document.createElement('div');
+							menu.className = 'canvasex-context-menu';
+							menu.style.position = 'fixed';
+							menu.style.zIndex = '9999';
+							menu.style.left = `${e.clientX}px`;
+							menu.style.top = `${e.clientY}px`;
+							menu.style.background = 'var(--background-primary, #222)';
+							menu.style.border = '1px solid var(--background-modifier-border, #444)';
+							menu.style.borderRadius = '6px';
+							menu.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
+							menu.style.padding = '4px 0';
+							menu.style.minWidth = '220px';
+
+							// 1. グループ内テキストノード一覧を出力
+							const itemList = document.createElement('div');
+							itemList.textContent = 'Output list of text nodes in the group';
+							itemList.style.padding = '8px 16px';
+							itemList.style.cursor = 'pointer';
+							itemList.style.color = 'var(--text-normal, #fff)';
+							itemList.addEventListener('mouseenter', () => {
+								itemList.style.background = 'var(--background-secondary, #333)';
+							});
+							itemList.addEventListener('mouseleave', () => {
+								itemList.style.background = '';
+							});
+							itemList.onclick = () => {
+								menu.remove();
+								// groupノードの範囲内にあるtextノードを抽出
+								const allNodes = (this.plugin.getCanvasData()?.nodes ?? []) as CanvasNode[];
+								const group = node;
+								const texts = allNodes.filter((n: any) =>
+									n.type === 'text' &&
+									typeof n.x === 'number' && typeof n.y === 'number' &&
+									typeof n.width === 'number' && typeof n.height === 'number' &&
+									n.x >= group.x &&
+									n.y >= group.y &&
+									(n.x + n.width) <= (group.x + group.width) &&
+									(n.y + n.height) <= (group.y + group.height)
+								);
+								if (texts.length === 0) {
+									new Notice('No text nodes in the group');
+									return;
+								}
+								let msg = 'List of text nodes in the group:\n';
+								texts.forEach((t: any) => {
+									msg += `ID: ${t.id}\nContent: ${t.text}\n---\n`;
+								});
+								console.log(msg);
+								new Notice('List of text nodes in the group has been output to the console');
+							};
+							menu.appendChild(itemList);
+
+							// 2. POST to Groq
+							const itemPost = document.createElement('div');
+							itemPost.textContent = 'POST to Groq';
+							itemPost.style.padding = '8px 16px';
+							itemPost.style.cursor = 'pointer';
+							itemPost.style.color = 'var(--text-normal, #fff)';
+							itemPost.addEventListener('mouseenter', () => {
+								itemPost.style.background = 'var(--background-secondary, #333)';
+							});
+							itemPost.addEventListener('mouseleave', () => {
+								itemPost.style.background = '';
+							});
+							itemPost.onclick = async () => {
+								menu.remove();
+								const apiKey = this.plugin.settings.groqApiKey;
+								const msgObj = (this.plugin.settings.groqDefaultMessages || []).find((m: any) => m.id === this.plugin.settings.groqDefaultMessageId) || { message: '' };
+								const defaultMsg = msgObj.message || '';
+								const group = node;
+								const allNodes = (this.plugin.getCanvasData()?.nodes ?? []) as CanvasNode[];
+								const texts = allNodes.filter((n: any) =>
+									n.type === 'text' &&
+									typeof n.x === 'number' && typeof n.y === 'number' &&
+									typeof n.width === 'number' && typeof n.height === 'number' &&
+									n.x >= group.x &&
+									n.y >= group.y &&
+									(n.x + n.width) <= (group.x + group.width) &&
+									(n.y + n.height) <= (group.y + group.height)
+								).sort((a: any, b: any) => a.y - b.y || a.x - b.x);
+								let content = '';
+								if (defaultMsg) {
+									content = applyGroupTemplate(defaultMsg, texts);
+								} else {
+									content = texts.map((t: any) => t.text).join('\n');
+								}
+								if (!apiKey) {
+									new Notice('Groq API key is not set. Please enter your API key in the plugin settings.');
+									return;
+								}
+								new Notice('Posting to Groq...');
+								try {
+									const res = await postGroqChatCompletion(apiKey, {
+										model: this.plugin.settings.groqModel || 'llama3-8b-8192',
+										messages: [
+											{ role: 'user', content }
+										]
+									});
+									console.log('Groq API response:', res);
+									new Notice('Groq API response has been output to the console');
+
+									let responseText = res.choices?.[0]?.message?.content || res.choices?.[0]?.text || JSON.stringify(res);
+									let nodeTexts: string[] = [];
+									if (this.plugin.settings.groqExtractJsonOnly) {
+										const extracted = extractFirstJson(responseText);
+										if (extracted !== null) {
+											if (this.plugin.settings.groqExtractFields) {
+												try {
+													const obj = JSON.parse(extracted);
+													const fieldList = this.plugin.settings.groqExtractFields.split(',').map((f: any) => f.trim()).filter((f: any) => f);
+													if (Array.isArray(obj)) {
+														for (const item of obj) {
+															const text = fieldList.map((f: any) => formatField(item, f)).join('\n');
+															if (text.trim()) nodeTexts.push(text);
+														}
+													} else if (typeof obj === 'object' && obj) {
+														let pushed = false;
+														for (const f of fieldList) {
+															const v = obj[f];
+															if (Array.isArray(v)) {
+																for (const vv of v) {
+																	if (typeof vv === 'object') {
+																		nodeTexts.push(`${f}: ${JSON.stringify(vv)}`);
+																	} else {
+																		nodeTexts.push(`${f}: ${vv}`);
+																	}
+																}
+																pushed = true;
+															}
+														}
+														if (!pushed) {
+															nodeTexts.push(fieldList.map((f: any) => formatField(obj, f)).join('\n'));
+														}
+													} else {
+														nodeTexts.push(extracted);
+													}
+												} catch {
+													nodeTexts.push(extracted);
+												}
+											} else {
+												nodeTexts.push(extracted);
+											}
+										} else {
+											nodeTexts.push(responseText);
+										}
+									} else {
+										nodeTexts.push(responseText);
+									}
+									// 現在開いているcanvasファイルを取得
+									const activeLeaf = this.plugin.app.workspace.activeLeaf;
+									let canvasFile: TFile | null = null;
+									if (activeLeaf && activeLeaf.view && typeof (activeLeaf.view as any).file === 'object') {
+										canvasFile = (activeLeaf.view as any).file as TFile;
+									}
+									if (!canvasFile) {
+										const canvasLeaves = this.plugin.app.workspace.getLeavesOfType('canvas');
+										if (canvasLeaves.length > 0 && typeof (canvasLeaves[0].view as any).file === 'object') {
+											canvasFile = (canvasLeaves[0].view as any).file as TFile;
+										}
+									}
+									if (!canvasFile) {
+										new Notice('Canvas file not found.');
+										return;
+									}
+									const fileContent = await this.plugin.app.vault.read(canvasFile);
+									let json: any;
+									try {
+										json = JSON.parse(fileContent);
+									} catch (e) {
+										new Notice('Failed to parse Canvas file JSON');
+										return;
+									}
+									if (!Array.isArray(json.nodes)) {
+										json.nodes = [];
+									}
+									// ノードを複数追加
+									let baseX = group.x + group.width + 40;
+									let baseY = group.y + group.height - 60;
+									nodeTexts.forEach((text, idx) => {
+										const newNode = {
+											id: 'node-' + Date.now() + '-' + Math.random().toString(36).slice(2),
+											type: 'text',
+											text,
+											x: baseX,
+											y: baseY + idx * 130,
+											width: 300,
+											height: 120
+										};
+										json.nodes.push(newNode);
+									});
+									// 履歴に追加
+									const history: GroqNodeHistoryEntry[] = this.plugin.settings.groqNodeHistory || [];
+									nodeTexts.forEach(text => {
+										history.unshift({
+											text,
+											timestamp: Date.now()
+										});
+									});
+									if (history.length > 100) history.length = 100;
+									this.plugin.settings.groqNodeHistory = history;
+									await this.plugin.saveSettings();
+									await this.plugin.app.vault.modify(canvasFile, JSON.stringify(json, null, 2));
+									new Notice('Groq response added to Canvas file. Please reload.');
+								} catch (e) {
+									console.error('Groq API error:', e);
+									new Notice('Groq API error: ' + e);
+								}
+							};
+							menu.appendChild(itemPost);
+
+							document.body.appendChild(menu);
+
+							// メニュー外クリックで消す
+							const removeMenu = (ev: MouseEvent) => {
+								if (!menu.contains(ev.target as Node)) {
+									menu.remove();
+									document.removeEventListener('mousedown', removeMenu);
+								}
+							};
+							setTimeout(() => {
+								document.addEventListener('mousedown', removeMenu);
+							}, 0);
+						});
 						break;
 				}
 			});
