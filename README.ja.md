@@ -1,5 +1,7 @@
 # Canvas Ex Plugin
 
+https://github.com/user-attachments/assets/83c263c2-f13c-47d4-aaaf-29030d79166e
+
 > このリポジトリのほとんどは、[Cursor](https://www.cursor.so/)（AIペアプログラミングツール）を使用して作成されました。
 
 ObsidianのCanvasでノード情報を取得・活用・AI連携できる多機能ユーティリティプラグインです。
