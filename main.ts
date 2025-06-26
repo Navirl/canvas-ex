@@ -142,11 +142,13 @@ export default class CanvasExPlugin extends Plugin {
 			})
 		);
 
-		// 定期的にノード一覧を更新（canvasが開いている間は常に表示し続けるため）
-		this.registerInterval(
-			window.setInterval(() => {
-				this.updateNodesView();
-			}, 2000) // 2秒ごとに更新
+		// === MutationObserverによるCanvasノード変化監視 ===
+		this.registerEvent(
+			this.app.workspace.on('layout-change', () => {
+				setTimeout(() => {
+					this.addCanvasMutationObserver();
+				}, 1000);
+			})
 		);
 
 		// コマンド登録
@@ -251,11 +253,11 @@ export default class CanvasExPlugin extends Plugin {
 	addStyles() {
 		const styleEl = document.head.createEl('style');
 		styleEl.textContent = `
-			.canvas-nodes-container {
+			.canvas-ex-nodes-container {
 				padding: 10px;
 			}
 
-			.canvas-nodes-count {
+			.canvas-ex-nodes-count {
 				font-weight: bold;
 				color: var(--text-accent);
 				margin-bottom: 15px;
@@ -264,20 +266,20 @@ export default class CanvasExPlugin extends Plugin {
 				border-radius: 4px;
 			}
 
-			.canvas-nodes-empty {
+			.canvas-ex-nodes-empty {
 				color: var(--text-muted);
 				font-style: italic;
 				text-align: center;
 				padding: 20px;
 			}
 
-			.canvas-nodes-list {
+			.canvas-ex-nodes-list {
 				display: flex;
 				flex-direction: column;
 				gap: 10px;
 			}
 
-			.canvas-node-item {
+			.canvas-ex-node-item {
 				border: 1px solid var(--background-modifier-border);
 				border-radius: 6px;
 				padding: 10px;
@@ -285,12 +287,12 @@ export default class CanvasExPlugin extends Plugin {
 				transition: all 0.2s ease;
 			}
 
-			.canvas-node-item:hover {
+			.canvas-ex-node-item:hover {
 				border-color: var(--interactive-accent);
 				box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 			}
 
-			.canvas-node-header {
+			.canvas-ex-node-header {
 				display: flex;
 				justify-content: space-between;
 				align-items: center;
@@ -299,51 +301,52 @@ export default class CanvasExPlugin extends Plugin {
 				border-bottom: 1px solid var(--background-modifier-border);
 			}
 
-			.canvas-node-type {
+			.canvas-ex-node-type {
 				font-weight: bold;
 				color: var(--text-accent);
 			}
 
-			.canvas-node-id {
+			.canvas-ex-node-id {
 				font-size: 0.8em;
 				color: var(--text-muted);
 				font-family: monospace;
 			}
 
-			.canvas-node-details {
+			.canvas-ex-node-details {
 				display: flex;
 				flex-direction: column;
 				gap: 3px;
 				font-size: 0.9em;
 			}
 
-			.canvas-node-position,
-			.canvas-node-size,
-			.canvas-node-color,
-			.canvas-node-file,
-			.canvas-node-subpath,
-			.canvas-node-text,
-			.canvas-node-url,
-			.canvas-node-label,
-			.canvas-node-background {
+			.canvas-ex-node-position,
+			.canvas-ex-node-size,
+			.canvas-ex-node-color,
+			.canvas-ex-node-file,
+			.canvas-ex-node-subpath,
+			.canvas-ex-node-text,
+			.canvas-ex-node-url,
+			.canvas-ex-node-label,
+			.canvas-ex-node-background {
 				color: var(--text-normal);
+				position: static !important;
 			}
 
-			.canvas-node-text-content {
+			.canvas-ex-node-text-content {
 				color: var(--text-accent);
 				font-style: italic;
 			}
 
-			.canvas-node-file {
+			.canvas-ex-node-file {
 				color: var(--text-accent-hover);
 			}
 
-			.canvas-node-url {
+			.canvas-ex-node-url {
 				color: var(--text-accent);
 				word-break: break-all;
 			}
 
-			.canvas-node-label {
+			.canvas-ex-node-label {
 				font-weight: bold;
 				color: var(--text-accent);
 			}
@@ -722,6 +725,23 @@ export default class CanvasExPlugin extends Plugin {
 			new Notice('History node added to Canvas. Please reload.');
 		});
 	}
+
+	// === MutationObserver追加 ===
+	addCanvasMutationObserver() {
+		const canvasLeaves = this.app.workspace.getLeavesOfType('canvas');
+		if (canvasLeaves.length === 0) return;
+		const view = canvasLeaves[0].view as any;
+		if (!view || !view.canvas) return;
+		const canvasEl = view.canvas.containerEl || view.canvas.el || document.querySelector('.canvas-container');
+		if (!canvasEl) return;
+		if ((canvasEl as any)._canvasExObserverAdded) return; // 二重登録防止
+		(canvasEl as any)._canvasExObserverAdded = true;
+
+		const observer = new MutationObserver(() => {
+			this.updateNodesView();
+		});
+		observer.observe(canvasEl, { childList: true, subtree: true });
+	}
 }
 
 // Canvasノード一覧を表示するサイドバービュー
@@ -797,7 +817,7 @@ class CanvasNodesView extends ItemView {
 
 		// ノード一覧のコンテナ
 		this.nodesContainer = container.createEl('div', {
-			cls: 'canvas-nodes-container'
+			cls: 'canvas-ex-nodes-container'
 		});
 
 		this.updateNodes();
@@ -841,62 +861,62 @@ class CanvasNodesView extends ItemView {
 				if (hasCanvasOpen) {
 					this.nodesContainer.createEl('p', {
 						text: 'No nodes matching the criteria found',
-						cls: 'canvas-nodes-empty'
+						cls: 'canvas-ex-nodes-empty'
 					});
 				} else {
 					this.nodesContainer.createEl('p', {
 						text: 'No Canvas is open',
-						cls: 'canvas-nodes-empty'
+						cls: 'canvas-ex-nodes-empty'
 					});
 				}
 				return;
 			}
 			this.nodesContainer.createEl('p', {
 				text: `Node count: ${nodes.length}`,
-				cls: 'canvas-nodes-count'
+				cls: 'canvas-ex-nodes-count'
 			});
 			const nodesList = this.nodesContainer.createEl('div', {
-				cls: 'canvas-nodes-list'
+				cls: 'canvas-ex-nodes-list'
 			});
 			nodes.forEach((node, index) => {
 				const nodeEl = nodesList.createEl('div', {
-					cls: 'canvas-node-item'
+					cls: 'canvas-ex-node-item'
 				});
 
 				// ノードヘッダー
 				const headerEl = nodeEl.createEl('div', {
-					cls: 'canvas-node-header'
+					cls: 'canvas-ex-node-header'
 				});
 
 				headerEl.createEl('span', {
 					text: `${index + 1}. ${node.type || 'Unknown'}`,
-					cls: 'canvas-node-type'
+					cls: 'canvas-ex-node-type'
 				});
 
 				headerEl.createEl('span', {
 					text: `ID: ${node.id}`,
-					cls: 'canvas-node-id'
+					cls: 'canvas-ex-node-id'
 				});
 
 				// ノード詳細
 				const detailsEl = nodeEl.createEl('div', {
-					cls: 'canvas-node-details'
+					cls: 'canvas-ex-node-details'
 				});
 
 				detailsEl.createEl('div', {
 					text: `Position: (${node.x}, ${node.y})`,
-					cls: 'canvas-node-position'
+					cls: 'canvas-ex-node-position'
 				});
 
 				detailsEl.createEl('div', {
 					text: `Size: ${node.width} x ${node.height}`,
-					cls: 'canvas-node-size'
+					cls: 'canvas-ex-node-size'
 				});
 
 				if (node.color) {
 					detailsEl.createEl('div', {
 						text: `Color: ${node.color}`,
-						cls: 'canvas-node-color'
+						cls: 'canvas-ex-node-color'
 					});
 				}
 
@@ -906,25 +926,25 @@ class CanvasNodesView extends ItemView {
 						if (node.file) {
 							detailsEl.createEl('div', {
 								text: `File: ${node.file}`,
-								cls: 'canvas-node-file'
+								cls: 'canvas-ex-node-file'
 							});
 						}
 						if (node.subpath) {
 							detailsEl.createEl('div', {
 								text: `Subpath: ${node.subpath}`,
-								cls: 'canvas-node-subpath'
+								cls: 'canvas-ex-node-subpath'
 							});
 						}
 						break;
 					case 'text':
 						if (node.text) {
 							const textEl = detailsEl.createEl('div', {
-								cls: 'canvas-node-text'
+								cls: 'canvas-ex-node-text'
 							});
 							textEl.createEl('span', { text: 'Text: ' });
 							textEl.createEl('span', { 
 								text: node.text.length > 50 ? node.text.substring(0, 50) + '...' : node.text,
-								cls: 'canvas-node-text-content'
+								cls: 'canvas-ex-node-text-content'
 							});
 						}
 						break;
@@ -932,7 +952,7 @@ class CanvasNodesView extends ItemView {
 						if (node.url) {
 							detailsEl.createEl('div', {
 								text: `URL: ${node.url}`,
-								cls: 'canvas-node-url'
+								cls: 'canvas-ex-node-url'
 							});
 						}
 						break;
@@ -940,13 +960,13 @@ class CanvasNodesView extends ItemView {
 						if (node.label) {
 							detailsEl.createEl('div', {
 								text: `Label: ${node.label}`,
-								cls: 'canvas-node-label'
+								cls: 'canvas-ex-node-label'
 							});
 						}
 						if (node.background) {
 							detailsEl.createEl('div', {
 								text: `Background: ${node.background}`,
-								cls: 'canvas-node-background'
+								cls: 'canvas-ex-node-background'
 							});
 						}
 						break;
@@ -1187,19 +1207,19 @@ class CanvasNodesView extends ItemView {
 			if (history.length === 0) {
 				this.nodesContainer.createEl('p', {
 					text: 'No node history added via Groq',
-					cls: 'canvas-nodes-empty'
+					cls: 'canvas-ex-nodes-empty'
 				});
 				return;
 			}
 			this.nodesContainer.createEl('p', {
 				text: `History count: ${history.length}`,
-				cls: 'canvas-nodes-count'
+				cls: 'canvas-ex-nodes-count'
 			});
 			const historyList = this.nodesContainer.createEl('div', {
-				cls: 'canvas-nodes-list'
+				cls: 'canvas-ex-nodes-list'
 			});
 			history.forEach((entry, idx) => {
-				const item = historyList.createEl('div', { cls: 'canvas-node-item' });
+				const item = historyList.createEl('div', { cls: 'canvas-ex-node-item' });
 				item.createEl('div', { text: `${idx + 1}. ${entry.text.length > 40 ? entry.text.substring(0, 40) + '...' : entry.text}` });
 				item.createEl('div', { text: `Added at: ${new Date(entry.timestamp).toLocaleString()}` });
 
