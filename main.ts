@@ -1,7 +1,7 @@
 import { App, Plugin, ItemView, WorkspaceLeaf, TFile, PluginSettingTab, Setting, Modal, ButtonComponent, TextComponent, Notice } from 'obsidian';
-import { postGroqChatCompletion } from './groqApi';
-import { CanvasNodesView } from './canvas-ex/CanvasNodesView';
-import { CanvasExSettingTab } from './canvas-ex/CanvasExSettingTab';
+import { postGroqChatCompletion } from './src/groqApi';
+import { CanvasNodesView } from './src/CanvasNodesView';
+import { CanvasExSettingTab } from './src/CanvasExSettingTab';
 
 interface CanvasData {
 	nodes: any[];
@@ -87,9 +87,6 @@ export default class CanvasExPlugin extends Plugin {
 
 		// 設定タブを追加
 		this.addSettingTab(new CanvasExSettingTab(this.app, this));
-
-		// CSSスタイルを追加
-		this.addStyles();
 
 		// サイドバービューを登録
 		this.registerView(
@@ -255,109 +252,6 @@ export default class CanvasExPlugin extends Plugin {
 				}, 1000);
 			})
 		);
-	}
-
-	addStyles() {
-		const styleEl = document.head.createEl('style');
-		styleEl.textContent = `
-			.canvas-ex-nodes-container {
-				padding: 10px;
-			}
-
-			.canvas-ex-nodes-count {
-				font-weight: bold;
-				color: var(--text-accent);
-				margin-bottom: 15px;
-				padding: 8px;
-				background: var(--background-secondary);
-				border-radius: 4px;
-			}
-
-			.canvas-ex-nodes-empty {
-				color: var(--text-muted);
-				font-style: italic;
-				text-align: center;
-				padding: 20px;
-			}
-
-			.canvas-ex-nodes-list {
-				display: flex;
-				flex-direction: column;
-				gap: 10px;
-			}
-
-			.canvas-ex-node-item {
-				border: 1px solid var(--background-modifier-border);
-				border-radius: 6px;
-				padding: 10px;
-				background: var(--background-primary);
-				transition: all 0.2s ease;
-			}
-
-			.canvas-ex-node-item:hover {
-				border-color: var(--interactive-accent);
-				box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-			}
-
-			.canvas-ex-node-header {
-				display: flex;
-				justify-content: space-between;
-				align-items: center;
-				margin-bottom: 8px;
-				padding-bottom: 5px;
-				border-bottom: 1px solid var(--background-modifier-border);
-			}
-
-			.canvas-ex-node-type {
-				font-weight: bold;
-				color: var(--text-accent);
-			}
-
-			.canvas-ex-node-id {
-				font-size: 0.8em;
-				color: var(--text-muted);
-				font-family: monospace;
-			}
-
-			.canvas-ex-node-details {
-				display: flex;
-				flex-direction: column;
-				gap: 3px;
-				font-size: 0.9em;
-			}
-
-			.canvas-ex-node-position,
-			.canvas-ex-node-size,
-			.canvas-ex-node-color,
-			.canvas-ex-node-file,
-			.canvas-ex-node-subpath,
-			.canvas-ex-node-text,
-			.canvas-ex-node-url,
-			.canvas-ex-node-label,
-			.canvas-ex-node-background {
-				color: var(--text-normal);
-				position: static !important;
-			}
-
-			.canvas-ex-node-text-content {
-				color: var(--text-accent);
-				font-style: italic;
-			}
-
-			.canvas-ex-node-file {
-				color: var(--text-accent-hover);
-			}
-
-			.canvas-ex-node-url {
-				color: var(--text-accent);
-				word-break: break-all;
-			}
-
-			.canvas-ex-node-label {
-				font-weight: bold;
-				color: var(--text-accent);
-			}
-		`;
 	}
 
 	async activateView() {
