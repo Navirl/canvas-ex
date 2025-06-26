@@ -257,6 +257,42 @@ export class CanvasNodesView extends ItemView {
 					});
 				}
 
+				if (node.type === 'edge') {
+					if (node.label) {
+						detailsEl.createEl('div', {
+							text: `Label: ${node.label}`,
+							cls: 'canvas-ex-node-label'
+						});
+					}
+
+					// fromNode/toNodeの詳細表示
+					const canvasNodes = (this.plugin.getCanvasData()?.nodes ?? []) as CanvasNode[];
+					const from = canvasNodes.find(n => n.id === node.fromNode);
+					const to = canvasNodes.find(n => n.id === node.toNode);
+					const fromInfo = from ?
+						(from.type === 'file' ? `file: ${from.file}` :
+						 from.type === 'text' ? `text: ${from.text ? from.text.substring(0, 20) + (from.text.length > 20 ? '...' : '') : ''}` :
+						 from.type === 'group' ? `label: ${from.label}` :
+						 from.type || 'Unknown')
+						: 'Unknown';
+					const toInfo = to ?
+						(to.type === 'file' ? `file: ${to.file}` :
+						 to.type === 'text' ? `text: ${to.text ? to.text.substring(0, 20) + (to.text.length > 20 ? '...' : '') : ''}` :
+						 to.type === 'group' ? `label: ${to.label}` :
+						 to.type || 'Unknown')
+						: 'Unknown';
+					const fromType = from ? from.type : 'Unknown';
+					const toType = to ? to.type : 'Unknown';
+					detailsEl.createEl('div', {
+						text: `From: (${fromType}) ${fromInfo}`,
+						cls: 'canvas-ex-edge-from'
+					});
+					detailsEl.createEl('div', {
+						text: `To:   (${toType}) ${toInfo}`,
+						cls: 'canvas-ex-edge-to'
+					});
+				}
+
 				if (node.color) {
 					detailsEl.createEl('div', {
 						text: `Color: ${node.color}`,
