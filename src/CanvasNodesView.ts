@@ -706,7 +706,9 @@ export class CanvasNodesView extends ItemView {
 							valDiv.setAttr('draggable', 'true');
 							valDiv.addEventListener('dragstart', (e: DragEvent) => {
 								if (e.dataTransfer) {
-									e.dataTransfer.setData('text/plain', `${key}: ${displayValue}`);
+									const id = Date.now() + '-' + Math.random().toString(36).slice(2);
+									const textWithId = `${key}: ${displayValue} {{ID: ${id}}}`;
+									e.dataTransfer.setData('text/plain', textWithId);
 									e.dataTransfer.setData('application/x-canvasex-yamlprop', JSON.stringify({
 										file: this.fileNodePropsFile,
 										blockIdx: idx,
@@ -731,7 +733,9 @@ export class CanvasNodesView extends ItemView {
 							vDiv.setAttr('draggable', 'true');
 							vDiv.addEventListener('dragstart', (e: DragEvent) => {
 								if (e.dataTransfer) {
-									e.dataTransfer.setData('text/plain', `${k}: ${v}`);
+									const id = Date.now() + '-' + Math.random().toString(36).slice(2);
+									const textWithId = `${k}: ${v} {{ID: ${id}}}`;
+									e.dataTransfer.setData('text/plain', textWithId);
 									e.dataTransfer.effectAllowed = 'copy';
 								}
 							});
@@ -744,7 +748,9 @@ export class CanvasNodesView extends ItemView {
 						valDiv.setAttr('draggable', 'true');
 						valDiv.addEventListener('dragstart', (e: DragEvent) => {
 							if (e.dataTransfer) {
-								e.dataTransfer.setData('text/plain', `${key}: ${value}`);
+								const id = Date.now() + '-' + Math.random().toString(36).slice(2);
+								const textWithId = `${key}: ${value} {{ID: ${id}}}`;
+								e.dataTransfer.setData('text/plain', textWithId);
 								e.dataTransfer.effectAllowed = 'copy';
 							}
 						});
