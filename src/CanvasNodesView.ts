@@ -572,8 +572,8 @@ export class CanvasNodesView extends ItemView {
 									let baseX = node.x + node.width + 40;
 									let baseY = node.y + node.height - 60;
 									nodeTexts.forEach((text, idx) => {
-										// 追加: {{ID: ...}}を削除
-										const cleanedText = typeof text === 'string' ? text.replace(/\{\{ID:.*?\}\}/g, '').trim() : text;
+										// 追加: {{innerID: ...}}を削除
+										const cleanedText = typeof text === 'string' ? text.replace(/\{\{innerID:.*?\}\}/g, '').trim() : text;
 										const newNode = {
 											id: 'node-' + Date.now() + '-' + Math.random().toString(36).slice(2),
 											type: 'text',
@@ -707,7 +707,7 @@ export class CanvasNodesView extends ItemView {
 							valDiv.addEventListener('dragstart', (e: DragEvent) => {
 								if (e.dataTransfer) {
 									const id = Date.now() + '-' + Math.random().toString(36).slice(2);
-									const textWithId = `${key}: ${displayValue} {{ID: ${id}}}`;
+									const textWithId = `${key}: ${displayValue} {{innerID: ${id}}}`;
 									e.dataTransfer.setData('text/plain', textWithId);
 									e.dataTransfer.setData('application/x-canvasex-yamlprop', JSON.stringify({
 										file: this.fileNodePropsFile,
@@ -734,7 +734,7 @@ export class CanvasNodesView extends ItemView {
 							vDiv.addEventListener('dragstart', (e: DragEvent) => {
 								if (e.dataTransfer) {
 									const id = Date.now() + '-' + Math.random().toString(36).slice(2);
-									const textWithId = `${k}: ${v} {{ID: ${id}}}`;
+									const textWithId = `${k}: ${v} {{innerID: ${id}}}`;
 									e.dataTransfer.setData('text/plain', textWithId);
 									e.dataTransfer.effectAllowed = 'copy';
 								}
@@ -749,7 +749,7 @@ export class CanvasNodesView extends ItemView {
 						valDiv.addEventListener('dragstart', (e: DragEvent) => {
 							if (e.dataTransfer) {
 								const id = Date.now() + '-' + Math.random().toString(36).slice(2);
-								const textWithId = `${key}: ${value} {{ID: ${id}}}`;
+								const textWithId = `${key}: ${value} {{innerID: ${id}}}`;
 								e.dataTransfer.setData('text/plain', textWithId);
 								e.dataTransfer.effectAllowed = 'copy';
 							}

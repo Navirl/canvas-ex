@@ -253,7 +253,7 @@ export default class CanvasExPlugin extends Plugin {
 						if (Array.isArray(json.nodes)) {
 							(json.nodes as any[]).forEach((node: any) => {
 								if (node.type === 'text' && typeof node.text === 'string') {
-									const cleaned = node.text.replace(/\{\{ID:.*?\}\}/g, '').trim();
+									const cleaned = node.text.replace(/\{\{innerID:.*?\}\}/g, '').trim();
 									if (cleaned !== node.text) {
 										node.text = cleaned;
 										changed = true;
