@@ -763,6 +763,8 @@ export class CanvasNodesView extends ItemView {
 	 * @param value 削除したい値の文字列（例: 'key: value'）
 	 */
 	removeFilePropValue(file: string, value: string) {
+		// 設定でONのときだけ削除
+		if (!this.plugin.settings.groqRemovePropOnDrop) return;
 		if (!this.fileNodePropsFile || this.fileNodePropsFile !== file) return;
 		let changed = false;
 		// fileNodePropsは配列（各ブロック）
@@ -853,14 +855,12 @@ export class CanvasNodesView extends ItemView {
 							return newBlock;
 						});
 						if (modified) {
-							// YAML再構築
 							let newContent = content;
 							let idx = 0;
 							newContent = newContent.replace(/````?(canvasex|cex)[\s\S]*?````?/g, (match: string, fenceType: string) => {
 								const block = newBlocks[idx++];
 								return '```' + fenceType + '\n' + yaml.dump(block) + '```';
 							});
-							console.log('newContent', newContent);
 							app.vault.modify(tfile, newContent);
 						}
 					});
