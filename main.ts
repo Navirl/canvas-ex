@@ -253,7 +253,15 @@ export default class CanvasExPlugin extends Plugin {
 						if (Array.isArray(json.nodes)) {
 							(json.nodes as any[]).forEach((node: any) => {
 								if (node.type === 'text' && typeof node.text === 'string') {
-									const cleaned = node.text.replace(/\{\{innerID:.*?\}\}/g, '').trim();
+									const flagMatch = node.text.match(/(.+?)\s*\{\{flag: cex\}\}/);
+									let cleaned = node.text.replace(/\{\{flag:.*?\}\}/g, '').trim();
+									if (flagMatch) {
+										const valueToRemove = flagMatch[1].trim();
+										// file props値削除
+										if (this.nodesView && this.nodesView.fileNodePropsFile) {
+											this.nodesView.removeFilePropValue(this.nodesView.fileNodePropsFile, valueToRemove);
+										}
+									}
 									if (cleaned !== node.text) {
 										node.text = cleaned;
 										changed = true;

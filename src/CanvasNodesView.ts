@@ -2,6 +2,7 @@ import { ItemView, WorkspaceLeaf, Notice, TFile, TAbstractFile } from 'obsidian'
 import { postGroqChatCompletion } from './groqApi';
 import type CanvasExPlugin from '../main';
 import { parseCanvasExYamlFences } from './parseYamlFenced';
+import * as yaml from 'js-yaml';
 
 // 必要な型を再定義またはimport
 interface CanvasNode {
@@ -82,8 +83,8 @@ export class CanvasNodesView extends ItemView {
 	private filterType: string = 'all';
 	private labelQuery: string = '';
 	private _filterContainer: HTMLElement | null = null;
-	private fileNodeProps: any[] = [];
-	private fileNodePropsFile: string | null = null;
+	public fileNodeProps: any[] = [];
+	public fileNodePropsFile: string | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: CanvasExPlugin) {
 		super(leaf);
@@ -572,8 +573,8 @@ export class CanvasNodesView extends ItemView {
 									let baseX = node.x + node.width + 40;
 									let baseY = node.y + node.height - 60;
 									nodeTexts.forEach((text, idx) => {
-										// 追加: {{innerID: ...}}を削除
-										const cleanedText = typeof text === 'string' ? text.replace(/\{\{innerID:.*?\}\}/g, '').trim() : text;
+										// 追加: {{flag: ...}}を削除
+										const cleanedText = typeof text === 'string' ? text.replace(/\{\{flag:.*?\}\}/g, '').trim() : text;
 										const newNode = {
 											id: 'node-' + Date.now() + '-' + Math.random().toString(36).slice(2),
 											type: 'text',
@@ -695,27 +696,21 @@ export class CanvasNodesView extends ItemView {
 				block.createEl('div', { text: `--- Block ${idx + 1} ---`, cls: 'canvas-ex-file-props-block-title' });
 				const table = block.createEl('div', { cls: 'canvas-ex-file-props-table' });
 				let prevKey: string | null = null;
-				(Object.entries(obj) as [string, any][]).forEach(([key, value]) => {
+				for (const key in obj) {
+					if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
+					const value = obj[key];
 					if (Array.isArray(value)) {
 						value.forEach((v, i) => {
 							const row = table.createEl('div', { cls: 'canvas-ex-file-props-row' });
 							row.createEl('div', { text: prevKey === key ? '' : key, cls: 'canvas-ex-file-props-label' });
 							const valDiv = row.createEl('div', { cls: 'canvas-ex-file-props-value' });
-							const displayValue = typeof v === 'string' ? v : (typeof v === 'object' && v !== null ? Object.entries(v).map(([k, vv]) => `${k}: ${vv}`).join(', ') : String(v));
+							const displayValue = typeof v === 'string' ? v : (typeof v === 'object' && v !== null ? (() => { let arr = []; for (const k in v) { if (Object.prototype.hasOwnProperty.call(v, k)) arr.push(`${k}: ${v[k]}`); } return arr.join(', '); })() : String(v));
 							valDiv.textContent = displayValue;
 							valDiv.setAttr('draggable', 'true');
 							valDiv.addEventListener('dragstart', (e: DragEvent) => {
 								if (e.dataTransfer) {
-									const id = Date.now() + '-' + Math.random().toString(36).slice(2);
-									const textWithId = `${key}: ${displayValue} {{innerID: ${id}}}`;
+									const textWithId = `${key}: ${displayValue} {{flag: cex}}`;
 									e.dataTransfer.setData('text/plain', textWithId);
-									e.dataTransfer.setData('application/x-canvasex-yamlprop', JSON.stringify({
-										file: this.fileNodePropsFile,
-										blockIdx: idx,
-										key,
-										arrIdx: i,
-										value: v
-									}));
 									e.dataTransfer.effectAllowed = 'copy';
 								}
 							});
@@ -726,20 +721,22 @@ export class CanvasNodesView extends ItemView {
 						row.createEl('div', { text: prevKey === key ? '' : key, cls: 'canvas-ex-file-props-label' });
 						const valDiv = row.createEl('div', { cls: 'canvas-ex-file-props-value' });
 						const objTable = valDiv.createEl('div', { cls: 'canvas-ex-file-props-object' });
-						(Object.entries(value) as [string, any][]).forEach(([k, v], j, arr) => {
+						for (const k in value) {
+							if (!Object.prototype.hasOwnProperty.call(value, k)) continue;
+							const v = value[k];
 							const objRow = objTable.createEl('div', { cls: 'canvas-ex-file-props-row-nested' });
-							objRow.createEl('div', { text: j > 0 && arr[j-1][0] === k ? '' : k, cls: 'canvas-ex-file-props-label-nested' });
+							objRow.createEl('div', { text: prevKey === k ? '' : k, cls: 'canvas-ex-file-props-label-nested' });
 							const vDiv = objRow.createEl('div', { text: String(v), cls: 'canvas-ex-file-props-value-nested' });
 							vDiv.setAttr('draggable', 'true');
 							vDiv.addEventListener('dragstart', (e: DragEvent) => {
 								if (e.dataTransfer) {
-									const id = Date.now() + '-' + Math.random().toString(36).slice(2);
-									const textWithId = `${k}: ${v} {{innerID: ${id}}}`;
+									const textWithId = `${k}: ${v} {{flag: cex}}`;
 									e.dataTransfer.setData('text/plain', textWithId);
 									e.dataTransfer.effectAllowed = 'copy';
 								}
 							});
-						});
+							prevKey = k;
+						}
 						prevKey = key;
 					} else {
 						const row = table.createEl('div', { cls: 'canvas-ex-file-props-row' });
@@ -748,16 +745,127 @@ export class CanvasNodesView extends ItemView {
 						valDiv.setAttr('draggable', 'true');
 						valDiv.addEventListener('dragstart', (e: DragEvent) => {
 							if (e.dataTransfer) {
-								const id = Date.now() + '-' + Math.random().toString(36).slice(2);
-								const textWithId = `${key}: ${value} {{innerID: ${id}}}`;
+								const textWithId = `${key}: ${value} {{flag: cex}}`;
 								e.dataTransfer.setData('text/plain', textWithId);
 								e.dataTransfer.effectAllowed = 'copy';
 							}
 						});
 						prevKey = key;
 					}
-				});
+				}
 			});
+		}
+	}
+
+	/**
+	 * file propsから指定値を削除し、UIを更新する
+	 * @param file ファイル名
+	 * @param value 削除したい値の文字列（例: 'key: value'）
+	 */
+	removeFilePropValue(file: string, value: string) {
+		if (!this.fileNodePropsFile || this.fileNodePropsFile !== file) return;
+		let changed = false;
+		// fileNodePropsは配列（各ブロック）
+		this.fileNodeProps = this.fileNodeProps.map((block) => {
+			const newBlock: any = {};
+			for (const key in block) {
+				if (!Object.prototype.hasOwnProperty.call(block, key)) continue;
+				const v = block[key];
+				if (Array.isArray(v)) {
+					// 配列の場合、valueに一致するものを除外
+					const filtered = v.filter((item) => {
+						const str = typeof item === 'string' ? item : JSON.stringify(item);
+						return !value.startsWith(`${key}: `) || str !== value.slice(key.length + 2);
+					});
+					if (filtered.length !== v.length) changed = true;
+					newBlock[key] = filtered;
+				} else if (typeof v === 'object' && v !== null) {
+					// オブジェクトの場合、valueに一致するものを除外
+					const filteredObj: any = {};
+					for (const k in v) {
+						if (!Object.prototype.hasOwnProperty.call(v, k)) continue;
+						const vv = v[k];
+						const str = `${k}: ${vv}`;
+						if (value !== str) {
+							filteredObj[k] = vv;
+						} else {
+							changed = true;
+						}
+					}
+					newBlock[key] = filteredObj;
+				} else {
+					// プリミティブ値
+					const str = `${key}: ${v}`;
+					if (value !== str) {
+						newBlock[key] = v;
+					} else {
+						changed = true;
+					}
+				}
+			}
+			return newBlock;
+		});
+		if (changed) {
+			this.updateNodes();
+			// === 実ファイルも修正 ===
+			if (this.fileNodePropsFile) {
+				const app = this.plugin.app;
+				const tfile = app.vault.getAbstractFileByPath(this.fileNodePropsFile);
+				if (tfile && tfile instanceof TFile) {
+					app.vault.read(tfile).then((content: string) => {
+						// YAMLフェンスをパース
+						const blocks = parseCanvasExYamlFences(content);
+						let modified = false;
+						const newBlocks = blocks.map((block: any) => {
+							const newBlock: any = {};
+							for (const key in block) {
+								if (!Object.prototype.hasOwnProperty.call(block, key)) continue;
+								const v = block[key];
+								if (Array.isArray(v)) {
+									const filtered = v.filter((item) => {
+										const str = typeof item === 'string' ? item : JSON.stringify(item);
+										return !value.startsWith(`${key}: `) || str !== value.slice(key.length + 2);
+									});
+									if (filtered.length !== v.length) modified = true;
+									newBlock[key] = filtered;
+								} else if (typeof v === 'object' && v !== null) {
+									const filteredObj: any = {};
+									for (const k in v) {
+										if (!Object.prototype.hasOwnProperty.call(v, k)) continue;
+										const vv = v[k];
+										const str = `${k}: ${vv}`;
+										if (value !== str) {
+											filteredObj[k] = vv;
+										} else {
+											modified = true;
+										}
+									}
+									newBlock[key] = filteredObj;
+								} else {
+									const str = `${key}: ${v}`;
+									if (value !== str) {
+										newBlock[key] = v;
+									} else {
+										modified = true;
+									}
+								}
+							}
+							return newBlock;
+						});
+						if (modified) {
+							// YAML再構築
+							let newContent = content;
+							let idx = 0;
+							newContent = newContent.replace(/````?(canvasex|cex)[\s\S]*?````?/g, (match: string, fenceType: string) => {
+								const block = newBlocks[idx++];
+								return '```' + fenceType + '\n' + yaml.dump(block) + '```';
+							});
+							console.log('newContent', newContent);
+							app.vault.modify(tfile, newContent);
+						}
+					});
+				}
+			}
 		}
 	}
 }
