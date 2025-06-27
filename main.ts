@@ -240,6 +240,38 @@ export default class CanvasExPlugin extends Plugin {
 				}, defaultMsg).open();
 			}
 		});
+
+		// canvasファイル保存時にtextノードのID除去
+		this.registerEvent(
+			this.app.vault.on('modify', async (file) => {
+				if (file instanceof TFile && file.extension === 'canvas') {
+					try {
+						const content = await this.app.vault.read(file);
+						let json = JSON.parse(content);
+						let changed = false;
+						let cleanedCount = 0;
+						if (Array.isArray(json.nodes)) {
+							(json.nodes as any[]).forEach((node: any) => {
+								if (node.type === 'text' && typeof node.text === 'string') {
+									const cleaned = node.text.replace(/\{\{ID:.*?\}\}/g, '').trim();
+									if (cleaned !== node.text) {
+										node.text = cleaned;
+										changed = true;
+										cleanedCount++;
+									}
+								}
+							});
+						}
+						if (changed) {
+							debugLog(this, `canvasファイル修正: ${file.path}、textノード修正数: ${cleanedCount}`);
+							await this.app.vault.modify(file, JSON.stringify(json, null, 2));
+						}
+					} catch (e) {
+						// エラー時は何もしない
+					}
+				}
+			})
+		);
 	}
 
 	async activateView() {
@@ -545,4 +577,11 @@ function formatField(item: any, field: string): string {
 		return `${field}: ${value}`;
 	}
 	return '';
+}
+
+// === デバッグ用ヘルパー ===
+function debugLog(plugin: CanvasExPlugin, ...args: any[]) {
+	if (plugin.settings.groqDebugMode) {
+		console.log('[CanvasEx]', ...args);
+	}
 }

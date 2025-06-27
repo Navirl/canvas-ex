@@ -572,10 +572,12 @@ export class CanvasNodesView extends ItemView {
 									let baseX = node.x + node.width + 40;
 									let baseY = node.y + node.height - 60;
 									nodeTexts.forEach((text, idx) => {
+										// 追加: {{ID: ...}}を削除
+										const cleanedText = typeof text === 'string' ? text.replace(/\{\{ID:.*?\}\}/g, '').trim() : text;
 										const newNode = {
 											id: 'node-' + Date.now() + '-' + Math.random().toString(36).slice(2),
 											type: 'text',
-											text,
+											text: cleanedText,
 											x: baseX,
 											y: baseY + idx * 130,
 											width: 300,
