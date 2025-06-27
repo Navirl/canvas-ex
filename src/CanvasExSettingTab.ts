@@ -147,5 +147,27 @@ export class CanvasExSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         })
       );
+
+    new Setting(containerEl)
+      .setName('ドラッグ＆ドロップで元ファイルの値を削除')
+      .setDesc('File Propertiesからcanvasへドラッグ＆ドロップした際、元ファイルの該当値を自動で削除します')
+      .addToggle(toggle =>
+        toggle.setValue(this.plugin.settings.groqRemovePropOnDrop || false)
+        .onChange(async (value) => {
+          this.plugin.settings.groqRemovePropOnDrop = value;
+          await this.plugin.saveSettings();
+        })
+      );
+
+    new Setting(containerEl)
+      .setName('デバッグモード')
+      .setDesc('削除処理などの詳細なconsole.logを出力します')
+      .addToggle(toggle =>
+        toggle.setValue(this.plugin.settings.groqDebugMode || false)
+        .onChange(async (value) => {
+          this.plugin.settings.groqDebugMode = value;
+          await this.plugin.saveSettings();
+        })
+      );
   }
 } 

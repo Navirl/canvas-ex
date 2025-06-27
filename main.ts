@@ -3,6 +3,7 @@ import { postGroqChatCompletion } from './src/groqApi';
 import { CanvasNodesView } from './src/CanvasNodesView';
 import { CanvasExSettingTab } from './src/CanvasExSettingTab';
 import { parseCanvasExYamlFences } from './src/parseYamlFenced';
+import * as yaml from 'js-yaml';
 
 interface CanvasData {
 	nodes: any[];
@@ -63,6 +64,8 @@ interface CanvasExSettings {
 	groqModel?: string;
 	groqExtractJsonOnly?: boolean;
 	groqExtractFields?: string;
+	groqRemovePropOnDrop?: boolean;
+	groqDebugMode?: boolean;
 }
 
 const DEFAULT_SETTINGS: CanvasExSettings = {
@@ -75,6 +78,8 @@ const DEFAULT_SETTINGS: CanvasExSettings = {
 	groqModel: 'llama3-8b-8192',
 	groqExtractJsonOnly: false,
 	groqExtractFields: '',
+	groqRemovePropOnDrop: false,
+	groqDebugMode: false,
 };
 
 export default class CanvasExPlugin extends Plugin {
@@ -143,15 +148,6 @@ export default class CanvasExPlugin extends Plugin {
 				setTimeout(() => {
 					this.updateNodesView();
 				}, 500);
-			})
-		);
-
-		// === MutationObserverによるCanvasノード変化監視 ===
-		this.registerEvent(
-			this.app.workspace.on('layout-change', () => {
-				setTimeout(() => {
-					this.addCanvasMutationObserver();
-				}, 1000);
 			})
 		);
 
@@ -244,15 +240,6 @@ export default class CanvasExPlugin extends Plugin {
 				}, defaultMsg).open();
 			}
 		});
-
-		// Canvasへのドロップイベント追加
-		this.registerEvent(
-			this.app.workspace.on('layout-change', () => {
-				setTimeout(() => {
-					this.addCanvasDropListener();
-				}, 1000);
-			})
-		);
 	}
 
 	async activateView() {
@@ -466,87 +453,6 @@ export default class CanvasExPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
-	// Canvas DOMにドロップリスナーを追加
-	addCanvasDropListener() {
-		const canvasLeaves = this.app.workspace.getLeavesOfType('canvas');
-		if (canvasLeaves.length === 0) return;
-		const view = canvasLeaves[0].view as any;
-		if (!view || !view.canvas) return;
-		const canvasEl = view.canvas.containerEl || view.canvas.el || document.querySelector('.canvas-container');
-		if (!canvasEl) return;
-		if ((canvasEl as any)._canvasExDropAdded) return; // 二重登録防止
-		(canvasEl as any)._canvasExDropAdded = true;
-
-		canvasEl.addEventListener('dragover', (e: DragEvent) => {
-			e.preventDefault();
-			e.dataTransfer!.dropEffect = 'copy';
-		});
-		canvasEl.addEventListener('drop', async (e: DragEvent) => {
-			e.preventDefault();
-			const text = e.dataTransfer?.getData('text/plain');
-			if (!text) return;
-			// ドロップ座標をCanvas座標に変換
-			const rect = (canvasEl as HTMLElement).getBoundingClientRect();
-			const x = e.clientX - rect.left;
-			const y = e.clientY - rect.top;
-			// Canvasファイル取得
-			const activeLeaf = this.app.workspace.activeLeaf;
-			let canvasFile: TFile | null = null;
-			if (activeLeaf && activeLeaf.view && (activeLeaf.view as any).file) {
-				canvasFile = (activeLeaf.view as any).file as TFile;
-			}
-			if (!canvasFile) {
-				const canvasLeaves = this.app.workspace.getLeavesOfType('canvas');
-				if (canvasLeaves.length > 0 && (canvasLeaves[0].view as any).file) {
-					canvasFile = (canvasLeaves[0].view as any).file as TFile;
-				}
-			}
-			if (!canvasFile) {
-				new Notice('Canvas file not found.');
-				return;
-			}
-			const fileContent = await this.app.vault.read(canvasFile);
-			let json: any;
-			try {
-				json = JSON.parse(fileContent);
-			} catch (e) {
-				new Notice('Failed to parse Canvas file JSON');
-				return;
-			}
-			if (!Array.isArray(json.nodes)) {
-				json.nodes = [];
-			}
-			const newNode = {
-				id: 'node-' + Date.now() + '-' + Math.random().toString(36).slice(2),
-				type: 'text',
-				text,
-				x,
-				y,
-				width: 300,
-				height: 120
-			};
-			json.nodes.push(newNode);
-			await this.app.vault.modify(canvasFile, JSON.stringify(json, null, 2));
-			new Notice('History node added to Canvas. Please reload.');
-		});
-	}
-
-	// === MutationObserver追加 ===
-	addCanvasMutationObserver() {
-		const canvasLeaves = this.app.workspace.getLeavesOfType('canvas');
-		if (canvasLeaves.length === 0) return;
-		const view = canvasLeaves[0].view as any;
-		if (!view || !view.canvas) return;
-		const canvasEl = view.canvas.containerEl || view.canvas.el || document.querySelector('.canvas-container');
-		if (!canvasEl) return;
-		if ((canvasEl as any)._canvasExObserverAdded) return; // 二重登録防止
-		(canvasEl as any)._canvasExObserverAdded = true;
-
-		const observer = new MutationObserver(() => {
-			this.updateNodesView();
-		});
-		observer.observe(canvasEl, { childList: true, subtree: true });
-	}
 }
 
 // Groqチャット用モーダル

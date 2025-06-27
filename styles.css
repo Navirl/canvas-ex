@@ -94,4 +94,55 @@
 .canvas-ex-node-label {
 	font-weight: bold;
 	color: var(--text-accent);
+}
+
+/* === CanvasEx file props (Obsidian Property風) === */
+.canvas-ex-file-props-table {
+	display: table;
+	width: 100%;
+	border-collapse: separate;
+	border-spacing: 0 2px;
+	margin-bottom: 1em;
+}
+.canvas-ex-file-props-row {
+	display: table-row;
+}
+.canvas-ex-file-props-label {
+	display: table-cell;
+	font-weight: bold;
+	padding: 2px 8px 2px 0;
+	vertical-align: top;
+	color: var(--text-muted, #888);
+	min-width: 80px;
+	width: 1%;
+	white-space: nowrap;
+}
+.canvas-ex-file-props-value {
+	display: table-cell;
+	padding: 2px 0 2px 8px;
+	vertical-align: top;
+	word-break: break-all;
+}
+.canvas-ex-file-props-object {
+	margin-left: 1.5em;
+}
+.canvas-ex-file-props-row-nested {
+	display: flex;
+	margin-bottom: 2px;
+}
+.canvas-ex-file-props-label-nested {
+	font-weight: normal;
+	color: var(--text-faint, #aaa);
+	min-width: 60px;
+	margin-right: 8px;
+}
+.canvas-ex-file-props-value-nested {
+	flex: 1;
+	word-break: break-all;
+}
+.canvas-ex-file-props-block-title {
+	font-size: 1em;
+	font-weight: bold;
+	margin-bottom: 0.3em;
+	color: var(--text-accent, #6c6);
 } 

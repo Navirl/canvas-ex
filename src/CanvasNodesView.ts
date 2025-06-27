@@ -1,6 +1,7 @@
-import { ItemView, WorkspaceLeaf, Notice, TFile } from 'obsidian';
+import { ItemView, WorkspaceLeaf, Notice, TFile, TAbstractFile } from 'obsidian';
 import { postGroqChatCompletion } from './groqApi';
 import type CanvasExPlugin from '../main';
+import { parseCanvasExYamlFences } from './parseYamlFenced';
 
 // 必要な型を再定義またはimport
 interface CanvasNode {
@@ -24,6 +25,10 @@ interface CanvasNode {
 interface GroqNodeHistoryEntry {
 	text: string;
 	timestamp: number;
+}
+
+interface CanvasExSettings {
+	groqRemovePropOnDrop?: boolean;
 }
 
 const CANVAS_NODES_VIEW_TYPE = 'canvas-nodes-view';
@@ -73,10 +78,12 @@ export class CanvasNodesView extends ItemView {
 	private plugin: CanvasExPlugin;
 	private nodesContainer: HTMLElement;
 	private tabContainer: HTMLElement;
-	private currentTab: 'nodes' | 'history' = 'nodes';
+	private currentTab: 'nodes' | 'history' | 'fileProps' = 'nodes';
 	private filterType: string = 'all';
 	private labelQuery: string = '';
 	private _filterContainer: HTMLElement | null = null;
+	private fileNodeProps: any[] = [];
+	private fileNodePropsFile: string | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: CanvasExPlugin) {
 		super(leaf);
@@ -104,8 +111,10 @@ export class CanvasNodesView extends ItemView {
 		this.tabContainer = container.createEl('div', { cls: 'canvas-nodes-tab-container' });
 		const tabNodes = this.tabContainer.createEl('button', { text: 'Node List', cls: 'canvas-nodes-tab' });
 		const tabHistory = this.tabContainer.createEl('button', { text: 'History', cls: 'canvas-nodes-tab' });
+		const tabFileProps = this.tabContainer.createEl('button', { text: 'File Properties', cls: 'canvas-nodes-tab' });
 		tabNodes.onclick = () => { this.currentTab = 'nodes'; this.updateNodes(); };
 		tabHistory.onclick = () => { this.currentTab = 'history'; this.updateNodes(); };
+		tabFileProps.onclick = () => { this.currentTab = 'fileProps'; this.updateNodes(); };
 		tabNodes.classList.add('active');
 
 		// === 追加: フィルターUI ===
@@ -167,8 +176,17 @@ export class CanvasNodesView extends ItemView {
 		// タブのactive切り替え
 		const tabs = this.tabContainer.querySelectorAll('button');
 		tabs.forEach(btn => btn.classList.remove('active'));
-		if (this.currentTab === 'nodes') tabs[0].classList.add('active');
-		if (this.currentTab === 'history') tabs[1].classList.add('active');
+		switch (this.currentTab) {
+			case 'nodes':
+				tabs[0].classList.add('active');
+				break;
+			case 'history':
+				tabs[1].classList.add('active');
+				break;
+			case 'fileProps':
+				tabs[2].classList.add('active');
+				break;
+		}
 
 		if (this.currentTab === 'nodes') {
 			let nodes = (this.plugin.getCanvasData()?.nodes ?? []) as CanvasNode[];
@@ -308,6 +326,28 @@ export class CanvasNodesView extends ItemView {
 								text: `File: ${node.file}`,
 								cls: 'canvas-ex-node-file'
 							});
+							// === クリックイベント追加 ===
+							detailsEl.style.cursor = 'pointer';
+							detailsEl.title = 'クリックでファイルプロパティを表示';
+							detailsEl.onclick = async (e) => {
+								e.stopPropagation();
+								if (!node.file) return;
+								try {
+									const tfile = this.plugin.app.vault.getAbstractFileByPath(node.file);
+									if (!tfile || !(tfile instanceof TFile)) {
+										new Notice('ファイルが見つかりません');
+										return;
+									}
+									const content = await this.plugin.app.vault.read(tfile);
+									const props = parseCanvasExYamlFences(content);
+									this.fileNodeProps = props;
+									this.fileNodePropsFile = node.file;
+									this.currentTab = 'fileProps';
+									this.updateNodes();
+								} catch (err) {
+									new Notice('ファイル読み込みエラー');
+								}
+							};
 						}
 						if (node.subpath) {
 							detailsEl.createEl('div', {
@@ -635,6 +675,81 @@ export class CanvasNodesView extends ItemView {
 					});
 				});
 			}
+		} else if (this.currentTab === 'fileProps') {
+			// === ファイルプロパティ表示 ===
+			const file = this.fileNodePropsFile;
+			const props = this.fileNodeProps;
+			if (!file) {
+				this.nodesContainer.createEl('p', { text: 'ファイルが選択されていません', cls: 'canvas-ex-nodes-empty' });
+				return;
+			}
+			this.nodesContainer.createEl('h4', { text: `File Properties: ${file}` });
+			if (!props || props.length === 0) {
+				this.nodesContainer.createEl('p', { text: 'canvasex/cexコードフェンスが見つかりません', cls: 'canvas-ex-nodes-empty' });
+				return;
+			}
+			props.forEach((obj, idx) => {
+				const block = this.nodesContainer.createEl('div', { cls: 'canvas-ex-file-props-block' });
+				block.createEl('div', { text: `--- Block ${idx + 1} ---`, cls: 'canvas-ex-file-props-block-title' });
+				const table = block.createEl('div', { cls: 'canvas-ex-file-props-table' });
+				let prevKey: string | null = null;
+				(Object.entries(obj) as [string, any][]).forEach(([key, value]) => {
+					if (Array.isArray(value)) {
+						value.forEach((v, i) => {
+							const row = table.createEl('div', { cls: 'canvas-ex-file-props-row' });
+							row.createEl('div', { text: prevKey === key ? '' : key, cls: 'canvas-ex-file-props-label' });
+							const valDiv = row.createEl('div', { cls: 'canvas-ex-file-props-value' });
+							const displayValue = typeof v === 'string' ? v : (typeof v === 'object' && v !== null ? Object.entries(v).map(([k, vv]) => `${k}: ${vv}`).join(', ') : String(v));
+							valDiv.textContent = displayValue;
+							valDiv.setAttr('draggable', 'true');
+							valDiv.addEventListener('dragstart', (e: DragEvent) => {
+								if (e.dataTransfer) {
+									e.dataTransfer.setData('text/plain', `${key}: ${displayValue}`);
+									e.dataTransfer.setData('application/x-canvasex-yamlprop', JSON.stringify({
+										file: this.fileNodePropsFile,
+										blockIdx: idx,
+										key,
+										arrIdx: i,
+										value: v
+									}));
+									e.dataTransfer.effectAllowed = 'copy';
+								}
+							});
+							prevKey = key;
+						});
+					} else if (typeof value === 'object' && value !== null) {
+						const row = table.createEl('div', { cls: 'canvas-ex-file-props-row' });
+						row.createEl('div', { text: prevKey === key ? '' : key, cls: 'canvas-ex-file-props-label' });
+						const valDiv = row.createEl('div', { cls: 'canvas-ex-file-props-value' });
+						const objTable = valDiv.createEl('div', { cls: 'canvas-ex-file-props-object' });
+						(Object.entries(value) as [string, any][]).forEach(([k, v], j, arr) => {
+							const objRow = objTable.createEl('div', { cls: 'canvas-ex-file-props-row-nested' });
+							objRow.createEl('div', { text: j > 0 && arr[j-1][0] === k ? '' : k, cls: 'canvas-ex-file-props-label-nested' });
+							const vDiv = objRow.createEl('div', { text: String(v), cls: 'canvas-ex-file-props-value-nested' });
+							vDiv.setAttr('draggable', 'true');
+							vDiv.addEventListener('dragstart', (e: DragEvent) => {
+								if (e.dataTransfer) {
+									e.dataTransfer.setData('text/plain', `${k}: ${v}`);
+									e.dataTransfer.effectAllowed = 'copy';
+								}
+							});
+						});
+						prevKey = key;
+					} else {
+						const row = table.createEl('div', { cls: 'canvas-ex-file-props-row' });
+						row.createEl('div', { text: prevKey === key ? '' : key, cls: 'canvas-ex-file-props-label' });
+						const valDiv = row.createEl('div', { text: String(value), cls: 'canvas-ex-file-props-value' });
+						valDiv.setAttr('draggable', 'true');
+						valDiv.addEventListener('dragstart', (e: DragEvent) => {
+							if (e.dataTransfer) {
+								e.dataTransfer.setData('text/plain', `${key}: ${value}`);
+								e.dataTransfer.effectAllowed = 'copy';
+							}
+						});
+						prevKey = key;
+					}
+				});
+			});
 		}
 	}
 }
