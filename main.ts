@@ -2,6 +2,7 @@ import { App, Plugin, ItemView, WorkspaceLeaf, TFile, PluginSettingTab, Setting,
 import { postGroqChatCompletion } from './src/groqApi';
 import { CanvasNodesView } from './src/CanvasNodesView';
 import { CanvasExSettingTab } from './src/CanvasExSettingTab';
+import { parseCanvasExYamlFences } from './src/parseYamlFenced';
 
 interface CanvasData {
 	nodes: any[];
@@ -303,10 +304,14 @@ export default class CanvasExPlugin extends Plugin {
 				if ((window as any).logCanvasNodes) {
 					delete (window as any).logCanvasNodes;
 				}
+				if ((window as any).parseCanvasExYamlFences) {
+					delete (window as any).parseCanvasExYamlFences;
+				}
 
 				// 新しい関数を登録
 				(window as any).getCanvasData = this.getCanvasData.bind(this);
 				(window as any).logCanvasNodes = this.logCanvasNodes.bind(this);
+				(window as any).parseCanvasExYamlFences = parseCanvasExYamlFences;
 
 				this.isInitialized = true;
 
@@ -314,6 +319,7 @@ export default class CanvasExPlugin extends Plugin {
 				console.log('The following functions are now available:');
 				console.log('- getCanvasData(): Get complete data of the current canvas');
 				console.log('- logCanvasNodes(): Output node information to the console');
+				console.log('- parseCanvasExYamlFences(text): Parse canvasex/cex fenced YAML blocks from text');
 			}
 		} catch (error) {
 			console.error('Canvas Ex plugin initialization error:', error);
@@ -327,6 +333,7 @@ export default class CanvasExPlugin extends Plugin {
 			if (typeof window !== 'undefined') {
 				delete (window as any).getCanvasData;
 				delete (window as any).logCanvasNodes;
+				delete (window as any).parseCanvasExYamlFences;
 			}
 		} catch (error) {
 			console.error('Canvas Ex plugin unload error:', error);
