@@ -133,35 +133,30 @@ export class CanvasNodesView extends ItemView {
 			this.filterType = (e.target as HTMLSelectElement).value;
 			this.updateNodes();
 		};
-		// Groupラベル検索
-		filterContainer.createEl('span', { text: 'Search by Group Label:' });
-		const labelInput = filterContainer.createEl('input', { type: 'text', placeholder: 'Search by Group Label' });
+		// 検索UI文言変更・常時有効化
+		filterContainer.createEl('span', { text: '検索（ラベル/内容/パス/Type）:' });
+		const labelInput = filterContainer.createEl('input', { type: 'text', placeholder: 'ノードのラベル・内容・パス・Type で検索' });
 		labelInput.value = this.labelQuery;
 		labelInput.oninput = (e) => {
 			this.labelQuery = (e.target as HTMLInputElement).value;
 			this.updateNodes();
 		};
-		// group以外選択時は無効化
-		const updateLabelInputState = () => {
-			labelInput.disabled = this.filterType !== 'group';
-			if (labelInput.disabled) labelInput.value = '';
-		};
-		typeSelect.addEventListener('change', updateLabelInputState);
-		updateLabelInputState();
+		// 入力欄は常時有効
+		labelInput.disabled = false;
 
 		// ノード一覧のコンテナ
 		this.nodesContainer = container.createEl('div', {
 			cls: 'canvas-ex-nodes-container'
 		});
 
-		this.updateNodes();
+		await this.updateNodes();
 	}
 
 	async onClose() {
 		// クリーンアップ
 	}
 
-	updateNodes() {
+	async updateNodes() {
 		if (!this.nodesContainer) return;
 		this.nodesContainer.empty();
 
@@ -209,37 +204,70 @@ export class CanvasNodesView extends ItemView {
 				nodes = [...nodes, ...edgeNodes];
 			}
 
-			// === 追加: タイプフィルター ===
+			// === タイプフィルター ===
+			let filteredNodes = nodes;
 			if (this.filterType !== 'all') {
-				nodes = nodes.filter((n: CanvasNode) => n.type === this.filterType);
+				filteredNodes = filteredNodes.filter((n: CanvasNode) => n.type === this.filterType);
 			}
-			// === 追加: Groupラベル検索 ===
-			if (this.filterType === 'group' && this.labelQuery.trim() !== '') {
-				nodes = nodes.filter((n: CanvasNode) => typeof n.label === 'string' && n.label.includes(this.labelQuery.trim()));
+			// === 検索クエリフィルター ===
+			const query = this.labelQuery.trim();
+			if (query !== '') {
+				let syncFiltered = await Promise.all(filteredNodes.map(async (n) => {
+					if (n.type === 'file') {
+						// パス・サブパス
+						if ((n.file && n.file.includes(query)) || (n.subpath && n.subpath.includes(query))) return n;
+						// ファイル内容
+						if (n.file) {
+							try {
+								const tfile = this.plugin.app.vault.getAbstractFileByPath(n.file);
+								if (tfile && tfile instanceof TFile) {
+									const content = await this.plugin.app.vault.read(tfile);
+									if (content.includes(query)) return n;
+								}
+							} catch {}
+						}
+						return null;
+					} else if (n.type === 'text') {
+						if (n.text && n.text.includes(query)) return n;
+						return null;
+					} else if (n.type === 'group') {
+						if (n.label && n.label.includes(query)) return n;
+						return null;
+					} else if (n.type === 'edge') {
+						if (n.label && n.label.includes(query)) return n;
+						const canvasNodes = (this.plugin.getCanvasData()?.nodes ?? []) as CanvasNode[];
+						const from = canvasNodes.find((nn: CanvasNode) => nn.id === n.fromNode);
+						const to = canvasNodes.find((nn: CanvasNode) => nn.id === n.toNode);
+						if ((from && from.type && from.type.includes(query)) || (to && to.type && to.type.includes(query))) return n;
+						return null;
+					}
+					return null;
+				}));
+				filteredNodes = syncFiltered.filter((n): n is CanvasNode => n !== null);
 			}
-			if (nodes.length === 0) {
+			if (filteredNodes.length === 0) {
 				const hasCanvasOpen = this.plugin.hasCanvasOpen();
 				if (hasCanvasOpen) {
 					this.nodesContainer.createEl('p', {
-						text: 'No nodes matching the criteria found',
+						text: '条件に一致するノードが見つかりません',
 						cls: 'canvas-ex-nodes-empty'
 					});
 				} else {
 					this.nodesContainer.createEl('p', {
-						text: 'No Canvas is open',
+						text: 'Canvasが開かれていません',
 						cls: 'canvas-ex-nodes-empty'
 					});
 				}
 				return;
 			}
 			this.nodesContainer.createEl('p', {
-				text: `Node count: ${nodes.length}`,
+				text: `ノード数: ${filteredNodes.length}`,
 				cls: 'canvas-ex-nodes-count'
 			});
 			const nodesList = this.nodesContainer.createEl('div', {
 				cls: 'canvas-ex-nodes-list'
 			});
-			nodes.forEach((node: CanvasNode, index: number) => {
+			filteredNodes.forEach((node: CanvasNode, index: number) => {
 				const nodeEl = nodesList.createEl('div', {
 					cls: 'canvas-ex-node-item'
 				});
