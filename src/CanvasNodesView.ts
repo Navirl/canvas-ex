@@ -494,6 +494,126 @@ export class CanvasNodesView extends ItemView {
 								};
 								menu.appendChild(itemAddYaml);
 
+								// 3. YAML値をfileに切り取り追加（追加後canvasから削除）
+								const itemCutYaml = document.createElement('div');
+								itemCutYaml.textContent = '接続textノードのYAML値をfileに切り取り追加（追加後canvasから削除）';
+								itemCutYaml.style.padding = '8px 16px';
+								itemCutYaml.style.cursor = 'pointer';
+								itemCutYaml.style.color = 'var(--text-normal, #fff)';
+								itemCutYaml.addEventListener('mouseenter', () => {
+									itemCutYaml.style.background = 'var(--background-secondary, #333)';
+								});
+								itemCutYaml.addEventListener('mouseleave', () => {
+									itemCutYaml.style.background = '';
+								});
+								itemCutYaml.onclick = async () => {
+									menu.remove();
+									if (!node.file) {
+										new Notice('fileノードのfileパスがありません');
+										return;
+									}
+									const tfile = this.plugin.app.vault.getAbstractFileByPath(node.file);
+									if (!tfile || !(tfile instanceof TFile)) {
+										new Notice('ファイルが見つかりません');
+										return;
+									}
+									const canvasData = this.plugin.getCanvasData();
+									if (!canvasData) {
+										new Notice('Canvas data not found');
+										return;
+									}
+									const edges = canvasData.edges || [];
+									const nodes = canvasData.nodes || [];
+									const connectedTextNodes = edges
+										.filter((edge: any) => edge.toNode === node.id)
+										.map((edge: any) => nodes.find((n: any) => n.id === edge.fromNode && n.type === 'text'))
+										.filter((n: any) => n);
+									if (connectedTextNodes.length === 0) {
+										new Notice('No connected text nodes found');
+										return;
+									}
+									let content = await this.plugin.app.vault.read(tfile);
+									// YAMLフェンスをパース
+									let blocks = parseCanvasExYamlFences(content);
+									if (!blocks || blocks.length === 0) {
+										new Notice('canvasex/cexコードフェンスが見つかりません');
+										return;
+									}
+									let block = blocks[0]; // 最初のブロックのみ
+									let addedCount = 0;
+									let cutNodeIds: string[] = [];
+									for (const tnode of connectedTextNodes) {
+										const match = tnode.text.match(/^([\w\-]+):\s*(.+)$/);
+										if (!match) {
+											new Notice(`textノードID: ${tnode.id} の内容はYAML形式(key: value)ではありません`);
+											continue;
+										}
+										const key = match[1];
+										const value = match[2];
+										if (!block[key]) block[key] = [];
+										if (!Array.isArray(block[key])) block[key] = [block[key]];
+										if (!block[key].includes(value)) {
+											block[key].push(value);
+											addedCount++;
+											cutNodeIds.push(tnode.id);
+										}
+									}
+									if (addedCount > 0) {
+										// YAMLフェンスを書き換え
+										let idx = 0;
+										content = content.replace(/````?(canvasex|cex)[\s\S]*?````?/g, (match: string, fenceType: string) => {
+											if (idx === 0) {
+												idx++;
+												return '```' + fenceType + '\n' + yaml.dump(block) + '```';
+											} else {
+												idx++;
+												return match;
+											}
+										});
+										await this.plugin.app.vault.modify(tfile, content);
+										// canvasファイルからノード削除
+										const activeLeaf = this.plugin.app.workspace.activeLeaf;
+										let canvasFile: TFile | null = null;
+										if (activeLeaf && activeLeaf.view && typeof (activeLeaf.view as any).file === 'object') {
+											canvasFile = (activeLeaf.view as any).file as TFile;
+										}
+										if (!canvasFile) {
+											const canvasLeaves = this.plugin.app.workspace.getLeavesOfType('canvas');
+											if (canvasLeaves.length > 0 && typeof (canvasLeaves[0].view as any).file === 'object') {
+												canvasFile = (canvasLeaves[0].view as any).file as TFile;
+											}
+										}
+										if (!canvasFile) {
+											new Notice('Canvas file not found. ノード削除は手動で行ってください');
+											return;
+										}
+										let fileContent = await this.plugin.app.vault.read(canvasFile);
+										let json: any;
+										try {
+											json = JSON.parse(fileContent);
+										} catch (e) {
+											new Notice('Failed to parse Canvas file JSON');
+											return;
+										}
+										if (!Array.isArray(json.nodes)) {
+											json.nodes = [];
+										}
+										const beforeCount = json.nodes.length;
+										json.nodes = json.nodes.filter((n: any) => !cutNodeIds.includes(n.id));
+										const afterCount = json.nodes.length;
+										await this.plugin.app.vault.modify(canvasFile, JSON.stringify(json, null, 2));
+										new Notice(`${addedCount}件の値をYAMLに追加し、${beforeCount - afterCount}件のtextノードをcanvasから削除しました`);
+										// UI更新
+										this.fileNodeProps = parseCanvasExYamlFences(content);
+										this.fileNodePropsFile = node.file;
+										this.currentTab = 'fileProps';
+										this.updateNodes();
+									} else {
+										new Notice('追加すべき新しい値はありませんでした');
+									}
+								};
+								menu.appendChild(itemCutYaml);
+
 								document.body.appendChild(menu);
 
 								// メニュー外クリックで消す
