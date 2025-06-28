@@ -407,6 +407,93 @@ export class CanvasNodesView extends ItemView {
 								};
 								menu.appendChild(itemList);
 
+								// 2. YAML値をfileに追加
+								const itemAddYaml = document.createElement('div');
+								itemAddYaml.textContent = '接続textノードのYAML値をfileに追加';
+								itemAddYaml.style.padding = '8px 16px';
+								itemAddYaml.style.cursor = 'pointer';
+								itemAddYaml.style.color = 'var(--text-normal, #fff)';
+								itemAddYaml.addEventListener('mouseenter', () => {
+									itemAddYaml.style.background = 'var(--background-secondary, #333)';
+								});
+								itemAddYaml.addEventListener('mouseleave', () => {
+									itemAddYaml.style.background = '';
+								});
+								itemAddYaml.onclick = async () => {
+									menu.remove();
+									if (!node.file) {
+										new Notice('fileノードのfileパスがありません');
+										return;
+									}
+									const tfile = this.plugin.app.vault.getAbstractFileByPath(node.file);
+									if (!tfile || !(tfile instanceof TFile)) {
+										new Notice('ファイルが見つかりません');
+										return;
+									}
+									const canvasData = this.plugin.getCanvasData();
+									if (!canvasData) {
+										new Notice('Canvas data not found');
+										return;
+									}
+									const edges = canvasData.edges || [];
+									const nodes = canvasData.nodes || [];
+									const connectedTextNodes = edges
+										.filter((edge: any) => edge.toNode === node.id)
+										.map((edge: any) => nodes.find((n: any) => n.id === edge.fromNode && n.type === 'text'))
+										.filter((n: any) => n);
+									if (connectedTextNodes.length === 0) {
+										new Notice('No connected text nodes found');
+										return;
+									}
+									let content = await this.plugin.app.vault.read(tfile);
+									// YAMLフェンスをパース
+									let blocks = parseCanvasExYamlFences(content);
+									if (!blocks || blocks.length === 0) {
+										new Notice('canvasex/cexコードフェンスが見つかりません');
+										return;
+									}
+									let block = blocks[0]; // 最初のブロックのみ
+									let addedCount = 0;
+									for (const tnode of connectedTextNodes) {
+										const match = tnode.text.match(/^([\w\-]+):\s*(.+)$/);
+										if (!match) {
+											new Notice(`textノードID: ${tnode.id} の内容はYAML形式(key: value)ではありません`);
+											continue;
+										}
+										const key = match[1];
+										const value = match[2];
+										if (!block[key]) block[key] = [];
+										if (!Array.isArray(block[key])) block[key] = [block[key]];
+										if (!block[key].includes(value)) {
+											block[key].push(value);
+											addedCount++;
+										}
+									}
+									if (addedCount > 0) {
+										// YAMLフェンスを書き換え
+										let idx = 0;
+										content = content.replace(/````?(canvasex|cex)[\s\S]*?````?/g, (match: string, fenceType: string) => {
+											if (idx === 0) {
+												idx++;
+												return '```' + fenceType + '\n' + yaml.dump(block) + '```';
+											} else {
+												idx++;
+												return match;
+											}
+										});
+										await this.plugin.app.vault.modify(tfile, content);
+										new Notice(`${addedCount}件の値をYAMLに追加しました`);
+										// UI更新
+										this.fileNodeProps = parseCanvasExYamlFences(content);
+										this.fileNodePropsFile = node.file;
+										this.currentTab = 'fileProps';
+										this.updateNodes();
+									} else {
+										new Notice('追加すべき新しい値はありませんでした');
+									}
+								};
+								menu.appendChild(itemAddYaml);
+
 								document.body.appendChild(menu);
 
 								// メニュー外クリックで消す
