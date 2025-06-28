@@ -4,6 +4,7 @@ import { CanvasNodesView } from './src/CanvasNodesView';
 import { CanvasExSettingTab } from './src/CanvasExSettingTab';
 import { parseCanvasExYamlFences } from './src/parseYamlFenced';
 import * as yaml from 'js-yaml';
+import { loadAllTemplates, GroqDefaultMessage } from './src/templateIO';
 
 interface CanvasData {
 	nodes: any[];
@@ -51,12 +52,6 @@ interface GroqNodeHistoryEntry {
 }
 
 // 設定インターフェース
-export interface GroqDefaultMessage {
-	id: string;
-	label: string;
-	message: string;
-}
-
 interface CanvasExSettings {
 	groqApiKey: string;
 	groqDefaultMessages?: GroqDefaultMessage[];
@@ -87,10 +82,16 @@ export default class CanvasExPlugin extends Plugin {
 	private isInitialized = false;
 	private nodesView: CanvasNodesView | null = null;
 	settings: CanvasExSettings;
+	templates: GroqDefaultMessage[] = [];
+	inputDir: string;
 
 	async onload() {
+		// inputディレクトリの絶対パスを初期化
+		this.inputDir = `${this.app.vault.configDir}/plugins/${this.manifest.id}/input`;
 		// 設定の読み込み
 		await this.loadSettings();
+		// テンプレートの読み込み
+		this.templates = await loadAllTemplates(this.app.vault, this.inputDir);
 
 		// 設定タブを追加
 		this.addSettingTab(new CanvasExSettingTab(this.app, this));
@@ -489,10 +490,14 @@ export default class CanvasExPlugin extends Plugin {
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		// テンプレートの再読み込み
+		this.templates = await loadAllTemplates(this.app.vault, this.inputDir);
 	}
 
 	async saveSettings() {
-		await this.saveData(this.settings);
+		// テンプレートはinputディレクトリで管理するため、data.jsonには保存しない
+		const { groqDefaultMessages, ...settingsToSave } = this.settings as any;
+		await this.saveData(settingsToSave);
 	}
 
 }

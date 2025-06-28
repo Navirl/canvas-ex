@@ -1,5 +1,6 @@
 import { App, PluginSettingTab, Setting, Notice } from 'obsidian';
 import type CanvasExPlugin from '../main';
+import { loadAllTemplates, saveTemplate, deleteTemplate, GroqDefaultMessage } from './templateIO';
 
 // モデル選択肢の型
 export interface GroqModelOption {
@@ -51,7 +52,7 @@ export class CanvasExSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.groqApiKey)
           .onChange(async (value) => {
             this.plugin.settings.groqApiKey = value;
-            await this.plugin.saveSettings();
+            this.plugin.saveSettings();
           })
       );
 
@@ -64,13 +65,13 @@ export class CanvasExSettingTab extends PluginSettingTab {
         drop.setValue(this.plugin.settings.groqModel || 'llama3-8b-8192');
         drop.onChange(async (value) => {
           this.plugin.settings.groqModel = value;
-          await this.plugin.saveSettings();
+          this.plugin.saveSettings();
         });
       });
 
     // === Input: Groq API Default Message Management ===
     containerEl.createEl('h3', { text: 'Groq API Default Message Management (Input Template)' });
-    const msgList = this.plugin.settings.groqDefaultMessages || [];
+    const msgList = this.plugin.templates || [];
     const msgId = this.plugin.settings.groqDefaultMessageId || (msgList[0]?.id ?? '');
 
     // 選択UI
@@ -82,7 +83,7 @@ export class CanvasExSettingTab extends PluginSettingTab {
         drop.setValue(msgId);
         drop.onChange(async (value) => {
           this.plugin.settings.groqDefaultMessageId = value;
-          await this.plugin.saveSettings();
+          this.plugin.saveSettings();
         });
       });
 
@@ -92,20 +93,21 @@ export class CanvasExSettingTab extends PluginSettingTab {
         .setName(`Message: ${msg.label}`)
         .addText(text => text.setValue(msg.label).onChange(async (v) => {
           msg.label = v;
-          await this.plugin.saveSettings();
+          await saveTemplate(this.plugin.app.vault, this.plugin.inputDir, msg);
         }))
         .addTextArea(text => text.setValue(msg.message).onChange(async (v) => {
           msg.message = v;
-          await this.plugin.saveSettings();
+          await saveTemplate(this.plugin.app.vault, this.plugin.inputDir, msg);
         }));
       // 削除ボタン
       if (msgList.length > 1) {
         s.addExtraButton(btn => btn.setIcon('trash').setTooltip('Delete').onClick(async () => {
-          this.plugin.settings.groqDefaultMessages = msgList.filter(m => m.id !== msg.id);
+          await deleteTemplate(this.plugin.app.vault, this.plugin.inputDir, msg.id);
           if (this.plugin.settings.groqDefaultMessageId === msg.id) {
-            this.plugin.settings.groqDefaultMessageId = this.plugin.settings.groqDefaultMessages[0]?.id ?? '';
+            this.plugin.settings.groqDefaultMessageId = this.plugin.templates[0]?.id ?? '';
+            this.plugin.saveSettings();
           }
-          await this.plugin.saveSettings();
+          this.plugin.templates = await loadAllTemplates(this.plugin.app.vault, this.plugin.inputDir);
           this.display();
         }));
       }
@@ -114,10 +116,11 @@ export class CanvasExSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .addButton(btn => btn.setButtonText('Add new message').onClick(async () => {
         const newId = 'msg-' + Date.now() + '-' + Math.random().toString(36).slice(2);
-        const newMsg = { id: newId, label: 'New Message', message: '' };
-        this.plugin.settings.groqDefaultMessages = [...msgList, newMsg];
+        const newMsg: GroqDefaultMessage = { id: newId, label: 'New Message', message: '' };
+        await saveTemplate(this.plugin.app.vault, this.plugin.inputDir, newMsg);
         this.plugin.settings.groqDefaultMessageId = newId;
-        await this.plugin.saveSettings();
+        this.plugin.saveSettings();
+        this.plugin.templates = await loadAllTemplates(this.plugin.app.vault, this.plugin.inputDir);
         this.display();
       }));
 
@@ -132,7 +135,7 @@ export class CanvasExSettingTab extends PluginSettingTab {
         toggle.setValue(this.plugin.settings.groqExtractJsonOnly || false)
         .onChange(async (value) => {
           this.plugin.settings.groqExtractJsonOnly = value;
-          await this.plugin.saveSettings();
+          this.plugin.saveSettings();
         })
       );
 
@@ -144,7 +147,7 @@ export class CanvasExSettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.groqExtractFields || '')
         .onChange(async (value) => {
           this.plugin.settings.groqExtractFields = value;
-          await this.plugin.saveSettings();
+          this.plugin.saveSettings();
         })
       );
 
@@ -155,7 +158,7 @@ export class CanvasExSettingTab extends PluginSettingTab {
         toggle.setValue(this.plugin.settings.groqRemovePropOnDrop || false)
         .onChange(async (value) => {
           this.plugin.settings.groqRemovePropOnDrop = value;
-          await this.plugin.saveSettings();
+          this.plugin.saveSettings();
         })
       );
 
@@ -166,7 +169,7 @@ export class CanvasExSettingTab extends PluginSettingTab {
         toggle.setValue(this.plugin.settings.groqDebugMode || false)
         .onChange(async (value) => {
           this.plugin.settings.groqDebugMode = value;
-          await this.plugin.saveSettings();
+          this.plugin.saveSettings();
         })
       );
   }

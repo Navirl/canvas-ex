@@ -1,0 +1,5 @@
+{
+  "id": "msg-1751119338130-260m6d2tnos",
+  "label": "NovelsChar-jp",
+  "message": "小説の設定で使用する設定を生成しようとしています。生成するのはcharacterです。このcharacterにあてはまる設定を2個作成してください。\n\n## 制限\n - {{text1}}の要素を含みます\n - {{text2}}の要素を含みます\n\n## 書式\n[\n  {\n    \"name\": \"\",\n    \"age\": ,\n    \"appearance\": [\"\"],\n    \"personality_traits\": [\"\"],\n    \"background\": [\"\"],\n    \"special_abilities\": [\"\"],\n    \"role\": [\"\"],\n    \"unique_trait\": [\"\"],\n    \"objective\": [\"\"]\n  }\n]"
+}
