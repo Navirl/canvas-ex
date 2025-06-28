@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, Notice, TFile, TAbstractFile } from 'obsidian';
+import { ItemView, WorkspaceLeaf, Notice, TFile, TAbstractFile, Modal, Setting } from 'obsidian';
 import { postGroqChatCompletion } from './groqApi';
 import type CanvasExPlugin from '../main';
 import { parseCanvasExYamlFences } from './parseYamlFenced';
@@ -26,6 +26,7 @@ interface CanvasNode {
 interface GroqNodeHistoryEntry {
 	text: string;
 	timestamp: number;
+	favorite?: boolean;
 }
 
 interface CanvasExSettings {
@@ -75,11 +76,48 @@ function formatField(item: any, field: string): string {
 	return '';
 }
 
+// お気に入り追加用モーダル
+class FavoriteInputModal extends Modal {
+	result: string = '';
+	onSubmit: (result: string) => void;
+	constructor(app: any, onSubmit: (result: string) => void) {
+		super(app);
+		this.onSubmit = onSubmit;
+	}
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.empty();
+		contentEl.createEl('h2', { text: 'お気に入りを追加' });
+		let inputValue = '';
+		new Setting(contentEl)
+			.setName('テキスト')
+			.addText((text) => {
+				text.onChange((value) => {
+					inputValue = value;
+				});
+			});
+		new Setting(contentEl)
+			.addButton((btn) =>
+				btn.setButtonText('追加')
+					.setCta()
+					.onClick(() => {
+						if (inputValue && inputValue.trim()) {
+							this.close();
+							this.onSubmit(inputValue.trim());
+						}
+					})
+			);
+	}
+	onClose() {
+		this.contentEl.empty();
+	}
+}
+
 export class CanvasNodesView extends ItemView {
 	private plugin: CanvasExPlugin;
 	private nodesContainer: HTMLElement;
 	private tabContainer: HTMLElement;
-	private currentTab: 'nodes' | 'history' | 'fileProps' = 'nodes';
+	private currentTab: 'nodes' | 'history' | 'favorites' | 'fileProps' = 'nodes';
 	private filterType: string = 'all';
 	private labelQuery: string = '';
 	private _filterContainer: HTMLElement | null = null;
@@ -112,9 +150,11 @@ export class CanvasNodesView extends ItemView {
 		this.tabContainer = container.createEl('div', { cls: 'canvas-nodes-tab-container' });
 		const tabNodes = this.tabContainer.createEl('button', { text: 'Node List', cls: 'canvas-nodes-tab' });
 		const tabHistory = this.tabContainer.createEl('button', { text: 'History', cls: 'canvas-nodes-tab' });
+		const tabFavorites = this.tabContainer.createEl('button', { text: 'Favorites', cls: 'canvas-nodes-tab' });
 		const tabFileProps = this.tabContainer.createEl('button', { text: 'File Properties', cls: 'canvas-nodes-tab' });
 		tabNodes.onclick = () => { this.currentTab = 'nodes'; this.updateNodes(); };
 		tabHistory.onclick = () => { this.currentTab = 'history'; this.updateNodes(); };
+		tabFavorites.onclick = () => { this.currentTab = 'favorites'; this.updateNodes(); };
 		tabFileProps.onclick = () => { this.currentTab = 'fileProps'; this.updateNodes(); };
 		tabNodes.classList.add('active');
 
@@ -179,8 +219,11 @@ export class CanvasNodesView extends ItemView {
 			case 'history':
 				tabs[1].classList.add('active');
 				break;
-			case 'fileProps':
+			case 'favorites':
 				tabs[2].classList.add('active');
+				break;
+			case 'fileProps':
+				tabs[3].classList.add('active');
 				break;
 		}
 
@@ -930,7 +973,9 @@ export class CanvasNodesView extends ItemView {
 			});
 		} else if (this.currentTab === 'history') {
 			// 履歴表示
-			const history = this.plugin.settings.groqNodeHistory || [];
+			const history = (this.plugin.settings.groqNodeHistory || []).slice();
+			// お気に入りを上にソート
+			history.sort((a, b) => (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0) || b.timestamp - a.timestamp);
 			if (history.length === 0) {
 				this.nodesContainer.createEl('p', {
 					text: 'No history entries found',
@@ -954,11 +999,35 @@ export class CanvasNodesView extends ItemView {
 						cls: 'canvas-ex-node-header'
 					});
 
+					// お気に入りボタン
+					const favBtn = headerEl.createEl('button', {
+						cls: 'canvas-ex-history-fav-btn',
+						attr: { style: 'margin-right:8px;' },
+						text: entry.favorite ? '★' : '☆'
+					});
+					favBtn.onclick = async () => {
+						entry.favorite = !entry.favorite;
+						await this.plugin.saveSettings();
+						this.updateNodes();
+					};
+					// 削除ボタン
+					const delBtn = headerEl.createEl('button', {
+						cls: 'canvas-ex-history-del-btn',
+						attr: { style: 'margin-right:8px;' },
+						text: '🗑'
+					});
+					delBtn.onclick = async () => {
+						const idx = this.plugin.settings.groqNodeHistory?.indexOf(entry);
+						if (idx !== undefined && idx > -1) {
+							this.plugin.settings.groqNodeHistory?.splice(idx, 1);
+							await this.plugin.saveSettings();
+							this.updateNodes();
+						}
+					};
 					headerEl.createEl('span', {
 						text: `${index + 1}. ${entry.text}`,
 						cls: 'canvas-ex-node-type'
 					});
-
 					headerEl.createEl('span', {
 						text: `Timestamp: ${new Date(entry.timestamp).toLocaleString()}`,
 						cls: 'canvas-ex-node-id'
@@ -984,6 +1053,82 @@ export class CanvasNodesView extends ItemView {
 					});
 				});
 			}
+		} else if (this.currentTab === 'favorites') {
+			const allHistory = (this.plugin.settings.groqNodeHistory || []).slice();
+			const favorites = allHistory.filter(e => e.favorite);
+			this.nodesContainer.createEl('p', {
+				text: `Favorites count: ${favorites.length}`,
+				cls: 'canvas-ex-nodes-count'
+			});
+			const addBtn = this.nodesContainer.createEl('button', {
+				text: '新規追加',
+				cls: 'canvas-ex-fav-add-btn',
+				attr: { style: 'margin-bottom:8px;' }
+			});
+			addBtn.onclick = async () => {
+				new FavoriteInputModal(this.plugin.app, async (text: string) => {
+					if (text && text.trim()) {
+						const entry: GroqNodeHistoryEntry = {
+							text: text.trim(),
+							timestamp: Date.now(),
+							favorite: true
+						};
+						this.plugin.settings.groqNodeHistory = [entry, ...allHistory];
+						await this.plugin.saveSettings();
+						this.updateNodes();
+					}
+				}).open();
+			};
+			const favList = this.nodesContainer.createEl('div', { cls: 'canvas-ex-nodes-list' });
+			favorites.forEach((entry: GroqNodeHistoryEntry, index: number) => {
+				const entryEl = favList.createEl('div', { cls: 'canvas-ex-node-item' });
+				const headerEl = entryEl.createEl('div', { cls: 'canvas-ex-node-header' });
+				// お気に入りボタン
+				const favBtn = headerEl.createEl('button', {
+					cls: 'canvas-ex-history-fav-btn',
+					attr: { style: 'margin-right:8px;' },
+					text: entry.favorite ? '★' : '☆'
+				});
+				favBtn.onclick = async () => {
+					entry.favorite = !entry.favorite;
+					await this.plugin.saveSettings();
+					this.updateNodes();
+				};
+				// 削除ボタン
+				const delBtn = headerEl.createEl('button', {
+					cls: 'canvas-ex-history-del-btn',
+					attr: { style: 'margin-right:8px;' },
+					text: '🗑'
+				});
+				delBtn.onclick = async () => {
+					const idx = this.plugin.settings.groqNodeHistory?.indexOf(entry);
+					if (idx !== undefined && idx > -1) {
+						this.plugin.settings.groqNodeHistory?.splice(idx, 1);
+						await this.plugin.saveSettings();
+						this.updateNodes();
+					}
+				};
+				headerEl.createEl('span', {
+					text: `${index + 1}. ${entry.text}`,
+					cls: 'canvas-ex-node-type'
+				});
+				headerEl.createEl('span', {
+					text: `Timestamp: ${new Date(entry.timestamp).toLocaleString()}`,
+					cls: 'canvas-ex-node-id'
+				});
+				const detailsEl = entryEl.createEl('div', { cls: 'canvas-ex-node-details' });
+				detailsEl.createEl('div', {
+					text: `Text: ${entry.text}`,
+					cls: 'canvas-ex-node-text'
+				});
+				entryEl.setAttr('draggable', 'true');
+				entryEl.addEventListener('dragstart', (e: DragEvent) => {
+					if (e.dataTransfer) {
+						e.dataTransfer.setData('text/plain', entry.text);
+						e.dataTransfer.effectAllowed = 'copy';
+					}
+				});
+			});
 		} else if (this.currentTab === 'fileProps') {
 			// === ファイルプロパティ表示 ===
 			const file = this.fileNodePropsFile;

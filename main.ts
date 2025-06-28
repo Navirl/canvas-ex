@@ -47,6 +47,7 @@ const CANVAS_NODES_VIEW_TYPE = 'canvas-nodes-view';
 interface GroqNodeHistoryEntry {
 	text: string;
 	timestamp: number;
+	favorite?: boolean;
 }
 
 // 設定インターフェース
@@ -227,7 +228,8 @@ export default class CanvasExPlugin extends Plugin {
 						nodeTexts.forEach(text => {
 							history.unshift({
 								text,
-								timestamp: Date.now()
+								timestamp: Date.now(),
+								favorite: false
 							});
 						});
 						if (history.length > 100) history.length = 100;
