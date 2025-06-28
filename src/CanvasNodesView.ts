@@ -349,6 +349,77 @@ export class CanvasNodesView extends ItemView {
 									new Notice('ファイル読み込みエラー');
 								}
 							};
+							// === 右クリックメニュー追加 ===
+							nodeEl.addEventListener('contextmenu', (e) => {
+								e.preventDefault();
+								document.querySelectorAll('.canvasex-context-menu').forEach(el => el.remove());
+
+								// メニュー作成
+								const menu = document.createElement('div');
+								menu.className = 'canvasex-context-menu';
+								menu.style.position = 'fixed';
+								menu.style.zIndex = '9999';
+								menu.style.left = `${e.clientX}px`;
+								menu.style.top = `${e.clientY}px`;
+								menu.style.background = 'var(--background-primary, #222)';
+								menu.style.border = '1px solid var(--background-modifier-border, #444)';
+								menu.style.borderRadius = '6px';
+								menu.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
+								menu.style.padding = '4px 0';
+								menu.style.minWidth = '260px';
+
+								// 1. 接続textノード一覧を出力
+								const itemList = document.createElement('div');
+								itemList.textContent = 'Output list of connected text nodes';
+								itemList.style.padding = '8px 16px';
+								itemList.style.cursor = 'pointer';
+								itemList.style.color = 'var(--text-normal, #fff)';
+								itemList.addEventListener('mouseenter', () => {
+									itemList.style.background = 'var(--background-secondary, #333)';
+								});
+								itemList.addEventListener('mouseleave', () => {
+									itemList.style.background = '';
+								});
+								itemList.onclick = () => {
+									menu.remove();
+									const canvasData = this.plugin.getCanvasData();
+									if (!canvasData) {
+										new Notice('Canvas data not found');
+										return;
+									}
+									const edges = canvasData.edges || [];
+									const nodes = canvasData.nodes || [];
+									// fileノードにtoNodeとして接続されているedgeを抽出
+									const connectedTextNodes = edges
+										.filter((edge: any) => edge.toNode === node.id)
+										.map((edge: any) => nodes.find((n: any) => n.id === edge.fromNode && n.type === 'text'))
+										.filter((n: any) => n);
+									if (connectedTextNodes.length === 0) {
+										new Notice('No connected text nodes found');
+										return;
+									}
+									let msg = 'List of text nodes connected to this file node:\n';
+									connectedTextNodes.forEach((t: any) => {
+										msg += `ID: ${t.id}\nContent: ${t.text}\n---\n`;
+									});
+									console.log(msg);
+									new Notice('List of connected text nodes has been output to the console');
+								};
+								menu.appendChild(itemList);
+
+								document.body.appendChild(menu);
+
+								// メニュー外クリックで消す
+								const removeMenu = (ev: MouseEvent) => {
+									if (!menu.contains(ev.target as Node)) {
+										menu.remove();
+										document.removeEventListener('mousedown', removeMenu);
+									}
+								};
+								setTimeout(() => {
+									document.addEventListener('mousedown', removeMenu);
+								}, 0);
+							});
 						}
 						if (node.subpath) {
 							detailsEl.createEl('div', {
