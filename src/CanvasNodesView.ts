@@ -1,8 +1,10 @@
 import { ItemView, WorkspaceLeaf, Notice, TFile, TAbstractFile, Modal, Setting } from 'obsidian';
 import { postGroqChatCompletion } from './groqApi';
 import type CanvasExPlugin from '../main';
+import { debugLog } from '../main';
 import { parseCanvasExYamlFences } from './parseYamlFenced';
 import * as yaml from 'js-yaml';
+import { OutputTemplate } from './outputTemplateIO';
 
 // 必要な型を再定義またはimport
 interface CanvasNode {
@@ -111,6 +113,16 @@ class FavoriteInputModal extends Modal {
 	onClose() {
 		this.contentEl.empty();
 	}
+}
+
+// 出力テンプレート適用関数
+function applyOutputTemplate(template: string, context: Record<string, any>): string {
+	let result = template;
+	for (const key of Object.keys(context)) {
+		const value = context[key];
+		result = result.replace(new RegExp(`{{\s*${key}\s*}}`, 'g'), value ?? '');
+	}
+	return result;
 }
 
 export class CanvasNodesView extends ItemView {
@@ -810,7 +822,7 @@ export class CanvasNodesView extends ItemView {
 							itemPost.onclick = async () => {
 								menu.remove();
 								const apiKey = this.plugin.settings.groqApiKey;
-								const msgObj = (this.plugin.settings.groqDefaultMessages || []).find((m: any) => m.id === this.plugin.settings.groqDefaultMessageId) || { message: '' };
+								const msgObj = (this.plugin.templates || []).find(m => m.id === this.plugin.settings.groqDefaultMessageId) || { message: '' };
 								const defaultMsg = msgObj.message || '';
 								const group = node;
 								const allNodes = (this.plugin.getCanvasData()?.nodes ?? []) as CanvasNode[];
@@ -834,6 +846,7 @@ export class CanvasNodesView extends ItemView {
 									return;
 								}
 								new Notice('Posting to Groq...');
+								debugLog(this.plugin, content);
 								try {
 									const res = await postGroqChatCompletion(apiKey, {
 										model: this.plugin.settings.groqModel || 'llama3-8b-8192',
@@ -846,50 +859,46 @@ export class CanvasNodesView extends ItemView {
 
 									let responseText = res.choices?.[0]?.message?.content || res.choices?.[0]?.text || JSON.stringify(res);
 									let nodeTexts: string[] = [];
+									// === 出力テンプレート適用 ===
+									const outputTpl = (this.plugin.outputTemplates || []).find(t => t.id === this.plugin.settings.groqOutputTemplateId) || { template: '{{json}}' };
 									if (this.plugin.settings.groqExtractJsonOnly) {
 										const extracted = extractFirstJson(responseText);
 										if (extracted !== null) {
+											let context: Record<string, any> = { json: extracted };
 											if (this.plugin.settings.groqExtractFields) {
 												try {
 													const obj = JSON.parse(extracted);
 													const fieldList = this.plugin.settings.groqExtractFields.split(',').map((f: any) => f.trim()).filter((f: any) => f);
 													if (Array.isArray(obj)) {
 														for (const item of obj) {
-															const text = fieldList.map((f: any) => formatField(item, f)).join('\n');
-															if (text.trim()) nodeTexts.push(text);
+															fieldList.forEach((f, idx) => {
+																context[`field${idx+1}`] = formatField(item, f);
+																context[`key${idx+1}`] = f;
+																context[`value${idx+1}`] = (item && item[f] !== undefined) ? (typeof item[f] === 'object' ? JSON.stringify(item[f]) : String(item[f])) : '';
+															});
+															nodeTexts.push(applyOutputTemplate(outputTpl.template, context));
 														}
 													} else if (typeof obj === 'object' && obj) {
-														let pushed = false;
-														for (const f of fieldList) {
-															const v = obj[f];
-															if (Array.isArray(v)) {
-																for (const vv of v) {
-																	if (typeof vv === 'object') {
-																		nodeTexts.push(`${f}: ${JSON.stringify(vv)}`);
-																	} else {
-																		nodeTexts.push(`${f}: ${vv}`);
-																	}
-																}
-																pushed = true;
-															}
-														}
-														if (!pushed) {
-															nodeTexts.push(fieldList.map((f: any) => formatField(obj, f)).join('\n'));
-														}
+														fieldList.forEach((f, idx) => {
+															context[`field${idx+1}`] = formatField(obj, f);
+															context[`key${idx+1}`] = f;
+															context[`value${idx+1}`] = (obj && obj[f] !== undefined) ? (typeof obj[f] === 'object' ? JSON.stringify(obj[f]) : String(obj[f])) : '';
+														});
+														nodeTexts.push(applyOutputTemplate(outputTpl.template, context));
 													} else {
-														nodeTexts.push(extracted);
+														nodeTexts.push(applyOutputTemplate(outputTpl.template, context));
 													}
 												} catch {
-													nodeTexts.push(extracted);
+													nodeTexts.push(applyOutputTemplate(outputTpl.template, context));
 												}
 											} else {
-												nodeTexts.push(extracted);
+												nodeTexts.push(applyOutputTemplate(outputTpl.template, context));
 											}
 										} else {
-											nodeTexts.push(responseText);
+											nodeTexts.push(applyOutputTemplate(outputTpl.template, { json: responseText }));
 										}
 									} else {
-										nodeTexts.push(responseText);
+										nodeTexts.push(applyOutputTemplate(outputTpl.template, { json: responseText }));
 									}
 									// 現在開いているcanvasファイルを取得
 									const activeLeaf = this.plugin.app.workspace.activeLeaf;
@@ -1174,18 +1183,21 @@ export class CanvasNodesView extends ItemView {
 						const objTable = valDiv.createEl('div', { cls: 'canvas-ex-file-props-object' });
 						for (const k in value) {
 							if (!Object.prototype.hasOwnProperty.call(value, k)) continue;
-							const v = value[k];
-							const objRow = objTable.createEl('div', { cls: 'canvas-ex-file-props-row-nested' });
-							objRow.createEl('div', { text: prevKey === k ? '' : k, cls: 'canvas-ex-file-props-label-nested' });
-							const vDiv = objRow.createEl('div', { text: String(v), cls: 'canvas-ex-file-props-value-nested' });
-							vDiv.setAttr('draggable', 'true');
-							vDiv.addEventListener('dragstart', (e: DragEvent) => {
-								if (e.dataTransfer) {
-									const textWithId = `${k}: ${v} {{flag: cex}}`;
-									e.dataTransfer.setData('text/plain', textWithId);
-									e.dataTransfer.effectAllowed = 'copy';
-								}
-							});
+							const vv = value[k];
+							const str = `${k}: ${vv}`;
+							if (value !== str) {
+								const objRow = objTable.createEl('div', { cls: 'canvas-ex-file-props-row-nested' });
+								objRow.createEl('div', { text: prevKey === k ? '' : k, cls: 'canvas-ex-file-props-label-nested' });
+								const vDiv = objRow.createEl('div', { text: String(vv), cls: 'canvas-ex-file-props-value-nested' });
+								vDiv.setAttr('draggable', 'true');
+								vDiv.addEventListener('dragstart', (e: DragEvent) => {
+									if (e.dataTransfer) {
+										const textWithId = `${k}: ${vv} {{flag: cex}}`;
+										e.dataTransfer.setData('text/plain', textWithId);
+										e.dataTransfer.effectAllowed = 'copy';
+									}
+								});
+							}
 							prevKey = k;
 						}
 						prevKey = key;

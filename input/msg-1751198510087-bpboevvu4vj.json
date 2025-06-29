@@ -1,0 +1,5 @@
+{
+  "id": "msg-1751198510087-bpboevvu4vj",
+  "label": "like-infinicraft",
+  "message": "Combine the following symbols: {{text1}} + {{text2}}\n\nReturn a single JSON object with two keys: \"symbol\" and \"emoji\". Do not add any other text.\n\nExample for \"Water\" + \"Fire\":\n[{\n  \"symbol\": \"Steam\",\n  \"emoji\": \"💨\"\n}]"
+}

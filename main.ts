@@ -5,6 +5,7 @@ import { CanvasExSettingTab } from './src/CanvasExSettingTab';
 import { parseCanvasExYamlFences } from './src/parseYamlFenced';
 import * as yaml from 'js-yaml';
 import { loadAllTemplates, GroqDefaultMessage } from './src/templateIO';
+import { loadAllOutputTemplates, OutputTemplate } from './src/outputTemplateIO';
 
 interface CanvasData {
 	nodes: any[];
@@ -62,6 +63,7 @@ interface CanvasExSettings {
 	groqExtractFields?: string;
 	groqRemovePropOnDrop?: boolean;
 	groqDebugMode?: boolean;
+	groqOutputTemplateId?: string;
 }
 
 const DEFAULT_SETTINGS: CanvasExSettings = {
@@ -76,6 +78,7 @@ const DEFAULT_SETTINGS: CanvasExSettings = {
 	groqExtractFields: '',
 	groqRemovePropOnDrop: false,
 	groqDebugMode: false,
+	groqOutputTemplateId: 'default',
 };
 
 export default class CanvasExPlugin extends Plugin {
@@ -84,14 +87,18 @@ export default class CanvasExPlugin extends Plugin {
 	settings: CanvasExSettings;
 	templates: GroqDefaultMessage[] = [];
 	inputDir: string;
+	outputTemplates: OutputTemplate[] = [];
+	outputDir: string;
 
 	async onload() {
 		// inputディレクトリの絶対パスを初期化
 		this.inputDir = `${this.app.vault.configDir}/plugins/${this.manifest.id}/input`;
+		this.outputDir = `${this.app.vault.configDir}/plugins/${this.manifest.id}/output`;
 		// 設定の読み込み
 		await this.loadSettings();
 		// テンプレートの読み込み
 		this.templates = await loadAllTemplates(this.app.vault, this.inputDir);
+		this.outputTemplates = await loadAllOutputTemplates(this.app.vault, this.outputDir);
 
 		// 設定タブを追加
 		this.addSettingTab(new CanvasExSettingTab(this.app, this));
@@ -490,8 +497,8 @@ export default class CanvasExPlugin extends Plugin {
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-		// テンプレートの再読み込み
 		this.templates = await loadAllTemplates(this.app.vault, this.inputDir);
+		this.outputTemplates = await loadAllOutputTemplates(this.app.vault, this.outputDir);
 	}
 
 	async saveSettings() {
@@ -595,7 +602,7 @@ function formatField(item: any, field: string): string {
 }
 
 // === デバッグ用ヘルパー ===
-function debugLog(plugin: CanvasExPlugin, ...args: any[]) {
+export function debugLog(plugin: CanvasExPlugin, ...args: any[]) {
 	if (plugin.settings.groqDebugMode) {
 		console.log('[CanvasEx]', ...args);
 	}

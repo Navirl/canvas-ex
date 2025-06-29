@@ -1,11 +1,55 @@
-import { App, PluginSettingTab, Setting, Notice } from 'obsidian';
+import { App, PluginSettingTab, Setting, Notice, Modal } from 'obsidian';
 import type CanvasExPlugin from '../main';
 import { loadAllTemplates, saveTemplate, deleteTemplate, GroqDefaultMessage } from './templateIO';
+import { loadAllOutputTemplates, saveOutputTemplate, deleteOutputTemplate, OutputTemplate } from './outputTemplateIO';
 
 // モデル選択肢の型
 export interface GroqModelOption {
   value: string;
   label: string;
+}
+
+// ヘルプモーダル
+class OutputTemplateHelpModal extends Modal {
+  constructor(app: App) {
+    super(app);
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl('h2', { text: '出力テンプレートのプレースホルダ一覧' });
+    contentEl.createEl('ul', {}, (ul) => {
+      ul.createEl('li', { text: '{{json}} : Groqレスポンスから抽出したJSON全体（テキスト）' });
+      ul.createEl('li', { text: '{{field1}}, {{field2}}, ... : 「抽出フィールド」設定で指定した順の値（key: value形式）' });
+      ul.createEl('li', { text: '{{key1}}, {{key2}}, ... : 「抽出フィールド」設定で指定した順のフィールド名' });
+      ul.createEl('li', { text: '{{value1}}, {{value2}}, ... : 「抽出フィールド」設定で指定した順の値（値のみ）' });
+    });
+    contentEl.createEl('p', { text: '例: "{{field1}}\n---\n{{field2}}" など' });
+    contentEl.createEl('p', { text: '今後バージョンアップで拡張される場合があります。' });
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+}
+
+// 入力テンプレート用ヘルプモーダル
+class InputTemplateHelpModal extends Modal {
+  constructor(app: App) {
+    super(app);
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl('h2', { text: '入力テンプレートのプレースホルダ一覧' });
+    contentEl.createEl('ul', {}, (ul) => {
+      ul.createEl('li', { text: '{{text1}}, {{text2}}, ... : グループ内のTextノードの内容（上から順にtext1, text2...）' });
+    });
+    contentEl.createEl('p', { text: '例: "{{text1}}\n---\n{{text2}}" など' });
+    contentEl.createEl('p', { text: '今後バージョンアップで拡張される場合があります。' });
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
 }
 
 export class CanvasExSettingTab extends PluginSettingTab {
@@ -122,7 +166,65 @@ export class CanvasExSettingTab extends PluginSettingTab {
         this.plugin.saveSettings();
         this.plugin.templates = await loadAllTemplates(this.plugin.app.vault, this.plugin.inputDir);
         this.display();
-      }));
+      }))
+      .addExtraButton(btn => btn.setIcon('help').setTooltip('ヘルプ').onClick(() => new InputTemplateHelpModal(this.app).open()));
+
+    // === Output: Groq API Response Output Template Management ===
+    containerEl.createEl('hr');
+    containerEl.createEl('h3', { text: 'Groq API Response Output Template Management (Output Template)' });
+    const outList = this.plugin.outputTemplates || [];
+    const outId = this.plugin.settings.groqOutputTemplateId || (outList[0]?.id ?? '');
+
+    // 出力テンプレート選択UI
+    new Setting(containerEl)
+      .setName('Select output template')
+      .setDesc('Choose the output template for Groq API response')
+      .addDropdown(drop => {
+        outList.forEach(o => drop.addOption(o.id, o.label));
+        drop.setValue(outId);
+        drop.onChange(async (value) => {
+          this.plugin.settings.groqOutputTemplateId = value;
+          this.plugin.saveSettings();
+        });
+      });
+
+    // 出力テンプレート一覧・編集UI
+    outList.forEach((tpl, idx) => {
+      const s = new Setting(containerEl)
+        .setName(`Output: ${tpl.label}`)
+        .addText(text => text.setValue(tpl.label).onChange(async (v) => {
+          tpl.label = v;
+          await saveOutputTemplate(this.plugin.app.vault, this.plugin.outputDir, tpl);
+        }))
+        .addTextArea(text => text.setValue(tpl.template).onChange(async (v) => {
+          tpl.template = v;
+          await saveOutputTemplate(this.plugin.app.vault, this.plugin.outputDir, tpl);
+        }));
+      // 削除ボタン
+      if (outList.length > 1) {
+        s.addExtraButton(btn => btn.setIcon('trash').setTooltip('Delete').onClick(async () => {
+          await deleteOutputTemplate(this.plugin.app.vault, this.plugin.outputDir, tpl.id);
+          if (this.plugin.settings.groqOutputTemplateId === tpl.id) {
+            this.plugin.settings.groqOutputTemplateId = this.plugin.outputTemplates[0]?.id ?? '';
+            this.plugin.saveSettings();
+          }
+          this.plugin.outputTemplates = await loadAllOutputTemplates(this.plugin.app.vault, this.plugin.outputDir);
+          this.display();
+        }));
+      }
+    });
+    // 追加ボタン
+    new Setting(containerEl)
+      .addButton(btn => btn.setButtonText('Add new output template').onClick(async () => {
+        const newId = 'out-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+        const newTpl: OutputTemplate = { id: newId, label: 'New Output', template: '{{json}}' };
+        await saveOutputTemplate(this.plugin.app.vault, this.plugin.outputDir, newTpl);
+        this.plugin.settings.groqOutputTemplateId = newId;
+        this.plugin.saveSettings();
+        this.plugin.outputTemplates = await loadAllOutputTemplates(this.plugin.app.vault, this.plugin.outputDir);
+        this.display();
+      }))
+      .addExtraButton(btn => btn.setIcon('help').setTooltip('ヘルプ').onClick(() => new OutputTemplateHelpModal(this.app).open()));
 
     // === Output: Groq API Response Extraction Settings ===
     containerEl.createEl('hr');

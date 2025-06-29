@@ -1,0 +1,5 @@
+{
+  "id": "out-1751199993271-sgreyhw26vk",
+  "label": "New Output",
+  "template": "{{value1}} {{value2}}"
+}
